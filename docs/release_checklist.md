@@ -13,11 +13,11 @@ This is the plain-English list to check before making SpendScope public.
 - [x] Public-download installation flow was tested, then the repository was returned to private.
 - [x] Apple signing and notarization steps are prepared in the package workflow.
 
-## Google login — owner confirmation needed
+## Google login
 
-- [ ] In Google Cloud Console, open **Google Auth Platform → Audience**.
-- [ ] Confirm **User type** is **External**.
-- [ ] Confirm **Publishing status** is **In production**. If it says **Testing**, click **Publish app**.
+- [x] In Google Cloud Console, open **Google Auth Platform → Audience**.
+- [x] Confirm **User type** is **External**.
+- [x] Confirm **Publishing status** is **In production**.
 - [ ] Open **Data Access** and check whether Google marks any requested scope as sensitive.
 - [ ] If Google requires verification, provide its requested homepage, privacy policy, scope explanation,
       and demonstration video, then submit the app for verification.

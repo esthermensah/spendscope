@@ -816,9 +816,12 @@ class MainWindow(QMainWindow):
         self.refresh()
 
     def open_settings(self) -> None:
-        if SettingsDialog(self.controller, self).exec():
+        dialog = SettingsDialog(self.controller, self)
+        if dialog.exec():
             self.appearance_actions[self.controller.config.appearance].setChecked(True)
-            self.refresh()
+        # Google connection changes take effect immediately, even if no appearance or
+        # currency settings were saved.
+        self.refresh()
 
     def _open_folder(self, name: str) -> None:
         path: Path = self.controller.config.directory_paths()[name]

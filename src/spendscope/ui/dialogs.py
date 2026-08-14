@@ -717,16 +717,16 @@ class SettingsDialog(QDialog):
         self.google_status.setObjectName("secondaryText")
         self.google_status.setWordWrap(True)
         google_actions = QHBoxLayout()
-        connect = QPushButton("Connect Google Drive")
-        connect.setObjectName("primaryAction")
-        disconnect = QPushButton("Disconnect")
-        open_report = QPushButton("Open report")
-        connect.clicked.connect(self._connect_google)
-        disconnect.clicked.connect(self._disconnect_google)
-        open_report.clicked.connect(self._open_report)
-        google_actions.addWidget(connect)
-        google_actions.addWidget(open_report)
-        google_actions.addWidget(disconnect)
+        self.google_connect = QPushButton("Connect Google Drive")
+        self.google_connect.setObjectName("primaryAction")
+        self.google_disconnect = QPushButton("Disconnect")
+        self.google_open_report = QPushButton("Open report")
+        self.google_connect.clicked.connect(self._connect_google)
+        self.google_disconnect.clicked.connect(self._disconnect_google)
+        self.google_open_report.clicked.connect(self._open_report)
+        google_actions.addWidget(self.google_connect)
+        google_actions.addWidget(self.google_open_report)
+        google_actions.addWidget(self.google_disconnect)
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Cancel | QDialogButtonBox.StandardButton.Save
         )
@@ -796,7 +796,14 @@ class SettingsDialog(QDialog):
             )
 
     def _refresh_google_status(self) -> None:
-        if self.controller.report_url():
+        connected = bool(self.controller.report_url())
+        self.google_connect.setText(
+            "Google Drive connected ✓" if connected else "Connect Google Drive"
+        )
+        self.google_connect.setEnabled(not connected)
+        self.google_open_report.setEnabled(connected)
+        self.google_disconnect.setEnabled(connected)
+        if connected:
             self.google_status.setText(
                 "Ready. SpendScope created and manages a report inside your Google Drive."
             )

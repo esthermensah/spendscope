@@ -140,10 +140,33 @@ def test_settings_hides_manual_sheet_id_and_explains_automatic_report(
 ) -> None:
     dialog = SettingsDialog(desktop_controller)
     assert "creates a Drive folder" in dialog.google_status.text()
+    assert dialog.google_connect.text() == "Connect Google Drive"
+    assert dialog.google_connect.isEnabled()
+    assert not dialog.google_open_report.isEnabled()
+    assert not dialog.google_disconnect.isEnabled()
     assert dialog.appearance.currentData() == Appearance.SYSTEM
     assert not any(
         "Developer connection" in button.text() for button in dialog.findChildren(QPushButton)
     )
+
+
+def test_settings_shows_connected_google_state(
+    qt_application: QApplication,
+    desktop_controller: DesktopController,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        desktop_controller,
+        "report_url",
+        lambda: "https://docs.google.com/spreadsheets/d/report-123",
+    )
+
+    dialog = SettingsDialog(desktop_controller)
+
+    assert dialog.google_connect.text() == "Google Drive connected ✓"
+    assert not dialog.google_connect.isEnabled()
+    assert dialog.google_open_report.isEnabled()
+    assert dialog.google_disconnect.isEnabled()
 
 
 def test_appearance_can_be_changed_from_dashboard_and_persists(
