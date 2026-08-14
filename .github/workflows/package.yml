@@ -55,7 +55,8 @@ jobs:
         run: |
           mkdir -p release
           ditto -c -k --sequesterRsrc --keepParent dist/SpendScope.app release/SpendScope-macOS-${{ runner.arch }}.zip
-          shasum -a 256 release/SpendScope-macOS-${{ runner.arch }}.zip > release/SpendScope-macOS-${{ runner.arch }}.zip.sha256
+          cd release
+          shasum -a 256 SpendScope-macOS-${{ runner.arch }}.zip > SpendScope-macOS-${{ runner.arch }}.zip.sha256
       - name: Archive Windows bundle
         if: runner.os == 'Windows'
         shell: pwsh
