@@ -2,15 +2,27 @@
 
 SpendScope is a local-first desktop application for item-level receipt and expense tracking. It stores financial data locally, supports offline workflows, and can optionally synchronize reporting data to Google Sheets.
 
-## Download the beta
+## Download the unsigned beta
 
 Open the repository's [Releases page](https://github.com/esthermensah/spendscope/releases) and
-download the ZIP for your computer. On macOS, unzip
-`SpendScope-macOS-ARM64.zip`, move `SpendScope.app` to Applications, then Control-click the app and
-choose **Open** the first time. On Windows, unzip `SpendScope-Windows-X64.zip` and open
-`SpendScope.exe` inside the SpendScope folder.
+download the ZIP for your computer. Only download builds from this repository.
 
-These beta builds are not yet signed or notarized. Receipt OCR also requires Tesseract to be
+On macOS:
+
+1. Unzip `SpendScope-macOS-ARM64.zip` and move `SpendScope.app` to Applications.
+2. Try opening SpendScope once. macOS will warn that Apple cannot verify the developer.
+3. Open **System Settings → Privacy & Security**, scroll to **Security**, and click **Open Anyway**.
+4. Confirm **Open**. Enter your Mac login password if macOS requests it.
+
+Apple documents this exception process in
+[Open apps safely on your Mac](https://support.apple.com/102445). Because this portfolio beta is
+not signed or notarized, macOS cannot confirm that Apple checked it for malicious software. Verify
+that the ZIP came from this repository before choosing **Open Anyway**.
+
+On Windows, unzip `SpendScope-Windows-X64.zip` and open `SpendScope.exe` inside the SpendScope
+folder. Windows may display a SmartScreen warning because the beta is not code-signed.
+
+These beta builds are intentionally unsigned and the Mac build is not Apple-notarized. Receipt OCR also requires Tesseract to be
 installed separately; manual expenses, budgets, local storage, and Google reporting remain
 available without it. The source code remains available through **Code → Download ZIP** for
 developers who prefer to run it directly.

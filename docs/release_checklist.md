@@ -11,7 +11,7 @@ This is the plain-English list to check before making SpendScope public.
 - [x] Automated tests pass on macOS, Windows, and Linux with Python 3.11 and 3.12.
 - [x] Google OAuth client configuration is stored as an encrypted GitHub secret.
 - [x] Public-download installation flow was tested, then the repository was returned to private.
-- [x] Apple signing and notarization steps are prepared in the package workflow.
+- [x] Apple signing and notarization remain available as an optional future workflow.
 
 ## Google login
 
@@ -23,21 +23,18 @@ This is the plain-English list to check before making SpendScope public.
       and demonstration video, then submit the app for verification.
 - [ ] Test Google sign-in using a Google account that is not listed as a test user.
 
-## Apple notarization — blocked until owner setup
+## Distribution decision
 
-- [ ] Enroll in the Apple Developer Program.
-- [ ] Install full Xcode from the Mac App Store and open it once to finish setup.
-- [ ] Create and install a **Developer ID Application** certificate.
-- [ ] Export that certificate and private key from Keychain Access as a password-protected `.p12` file.
-- [ ] Create an App Store Connect API key that can submit software for notarization.
-- [ ] Add the five Apple values listed in `docs/packaging.md` as encrypted GitHub Actions secrets.
-- [ ] Push a new version tag and confirm that signing, notarization, stapling, and Gatekeeper checks pass.
-- [ ] Download the resulting Mac ZIP on a different Mac and open it normally.
+- [x] Distribute SpendScope as an unsigned portfolio beta instead of paying for Apple notarization.
+- [x] Clearly label Mac and Windows downloads as unsigned.
+- [x] Document Apple's supported **Privacy & Security → Open Anyway** process for Mac users.
+- [x] Allow version tags to create unsigned beta releases when Apple credentials are absent.
+- [x] Keep optional Apple signing and notarization automation available for a future maintainer.
 
 ## Other public-release work
 
 - [ ] Decide how ordinary users receive Tesseract. It is currently a separate installation.
-- [ ] Sign the Windows package to avoid Windows SmartScreen warnings.
+- [ ] Optionally sign the Windows package to avoid Windows SmartScreen warnings.
 - [ ] Publish a simple app homepage and privacy policy for users and Google verification.
 - [ ] Delete the private old-history backup from this Mac when it is no longer needed.
 - [ ] Review this checklist together, then explicitly change the GitHub repository to public.

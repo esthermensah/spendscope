@@ -33,14 +33,18 @@ main window offscreen, and then removes the temporary data.
 
 The `Package desktop applications` GitHub Actions workflow builds both operating-system packages,
 runs the packaged smoke test, creates ZIP archives and SHA-256 checksum files, and uploads them as
-workflow artifacts. It can be started manually. Pushing a version tag such as `v0.1.0` requires
-the Apple secrets below, signs and notarizes the macOS application, and creates a draft GitHub
-release. Pull requests and manually started workflows continue to create unsigned development
-artifacts.
+workflow artifacts. It can be started manually. Pushing a version tag such as `v0.1.0` creates a
+clearly labeled unsigned beta release when Apple credentials are absent. If all optional Apple
+secrets below are configured, the same workflow signs and notarizes the Mac build before creating
+the draft release.
 
-## Apple signing and notarization
+## Optional Apple signing and notarization
 
-The repository expects these encrypted GitHub Actions secrets for version-tag builds:
+The owner chose not to purchase an Apple Developer Program membership for this portfolio beta.
+Unsigned Mac builds remain usable through Apple's documented **Privacy & Security → Open Anyway**
+process. Do not describe an unsigned build as Apple-reviewed, signed, or notarized.
+
+Future maintainers can enable signing by adding these encrypted GitHub Actions secrets:
 
 - `APPLE_CERTIFICATE_BASE64`: the base64-encoded Developer ID Application `.p12` file.
 - `APPLE_CERTIFICATE_PASSWORD`: the password chosen when exporting the `.p12` file.
@@ -56,8 +60,8 @@ password, or private key to the repository.
 Installed builds include **Help → Check for Updates…**. This performs a read-only check against the
 repository's latest public GitHub Release and opens that release page when a newer version exists.
 It deliberately does not replace the running application: unattended installation must wait until
-release artifacts are consistently signed and notarized. Developers running from source update with
-`git pull` and reinstall the editable package only when dependencies change.
+release artifacts can be authenticated and replaced safely. Developers running from source update
+with `git pull` and reinstall the editable package only when dependencies change.
 
 ## OCR dependency
 
@@ -78,11 +82,11 @@ owner decision is made.
 - Select and add the project license before distributing binaries.
 - Set a release version consistently in `pyproject.toml`, `spendscope/branding.py`, and the spec file.
 - Test receipt import, OCR, review, storage, and optional Google authorization on clean machines.
-- Sign the macOS bundle with an Apple Developer ID certificate and submit it for notarization.
-- Sign the Windows executable or installer with the project’s code-signing certificate.
+- Clearly label the macOS bundle as unsigned and unnotarized, with Apple's supported opening steps.
+- Clearly label the Windows executable as unsigned and warn that SmartScreen may appear.
 - Review bundled dependency licenses and ship required notices.
 - Verify each published ZIP against its `.sha256` file.
-- Publish the draft GitHub release only after signed artifacts replace the unsigned development ones.
+- Confirm every release draft contains the unsigned-beta warning before publishing it.
 
 The current owner-facing status is tracked in [`release_checklist.md`](release_checklist.md).
 
