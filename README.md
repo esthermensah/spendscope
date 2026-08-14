@@ -1,6 +1,32 @@
 # SpendScope
 
-SpendScope is a local-first desktop application for item-level receipt and expense tracking. It stores financial data locally, supports offline workflows, and can optionally synchronize reporting data to Google Sheets.
+**A free, privacy-conscious desktop spending tracker that turns receipts into useful insights while
+keeping you in control of your data.**
+
+SpendScope imports receipts and manually entered purchases, helps you review and categorize them,
+and shows where your money is going. Your financial data stays on your computer by default, and an
+optional Google connection can send your spending report to Google Sheets for access from another
+device.
+
+## Why I built it
+
+I built SpendScope because I wanted three things that most spending apps did not give me:
+
+- maximum control over my financial data;
+- no subscription fee; and
+- a desktop-first experience instead of another app constantly living on my phone.
+
+SpendScope is free and open source. It works locally and offline, while still letting me use Google
+Drive and Sheets when I want access from my phone or another device. The Google connection is
+optional—the desktop app remains the main home for tracking and reviewing spending.
+
+## How it works
+
+1. Import a receipt image or PDF, or enter a purchase manually.
+2. SpendScope reads the merchant, date, total, and individual items locally.
+3. Review the result, correct anything that needs attention, and choose spending categories.
+4. See the confirmed expense immediately in the dashboard, budgets, and category chart.
+5. Optionally connect Google Drive to create and update a Google Sheets spending report.
 
 ## Download the unsigned beta
 
