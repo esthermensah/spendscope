@@ -1,0 +1,26 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.coverage
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.venv/
+build/
+dist/
+htmlcov/
+*.db
+*.db-shm
+*.db-wal
+.DS_Store
+
+# Local financial data and credentials
+Inbox/
+Archive/
+Needs Review/
+Data/
+Exports/
+Config/
+client_secret*.json
+google_oauth_client.json
+token*.json

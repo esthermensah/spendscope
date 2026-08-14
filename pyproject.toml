@@ -1,0 +1,79 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "spendscope"
+version = "0.1.0"
+description = "Local-first item-level spending analysis"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+authors = [{ name = "SpendScope contributors" }]
+dependencies = [
+  "alembic>=1.14,<2",
+  "google-api-python-client>=2.160,<3",
+  "google-auth-oauthlib>=1.2,<2",
+  "keyring>=25.6,<26",
+  "Pillow>=11.1,<13",
+  "PySide6-Essentials>=6.8,<7",
+  "PyMuPDF>=1.25,<2",
+  "pypdf>=5.1,<7",
+  "pydantic>=2.10,<3",
+  "pydantic-settings>=2.7,<3",
+  "pytesseract>=0.3.13,<1",
+  "SQLAlchemy>=2.0,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+  "mypy>=1.14,<2",
+  "pre-commit>=4.0,<5",
+  "pytest>=8.3,<9",
+  "pytest-cov>=6.0,<7",
+  "ruff>=0.9,<1",
+]
+packaging = [
+  "pyinstaller>=6.21,<7",
+]
+
+[project.scripts]
+spendscope = "spendscope.cli:main"
+spendscope-desktop = "spendscope.ui.application:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/spendscope"]
+
+[tool.pytest.ini_options]
+addopts = "--strict-config --strict-markers --cov=spendscope --cov-report=term-missing --cov-fail-under=85"
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+packages = ["spendscope"]
+mypy_path = "src"
+plugins = ["pydantic.mypy", "sqlalchemy.ext.mypy.plugin"]
+
+[tool.coverage.run]
+branch = true
+omit = [
+  "src/spendscope/ui/__init__.py",
+  "src/spendscope/ui/application.py",
+  "src/spendscope/ui/dialogs.py",
+  "src/spendscope/ui/main_window.py",
+  "src/spendscope/ui/setup_wizard.py",
+  "src/spendscope/ui/workers.py",
+]
+
+[tool.coverage.report]
+exclude_also = ["if TYPE_CHECKING:", "if __name__ == .__main__.:"]
