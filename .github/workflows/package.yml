@@ -38,8 +38,35 @@ jobs:
           python -c "import os, pathlib;
           value = os.environ.get('SPENDSCOPE_GOOGLE_OAUTH_CLIENT', '');
           value and pathlib.Path('src/spendscope/reporting/google_oauth_client.json').write_text(value, encoding='utf-8')"
+      - name: Import Apple Developer ID certificate
+        if: runner.os == 'macOS' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          test -n "$APPLE_CERTIFICATE_BASE64"
+          test -n "$APPLE_CERTIFICATE_PASSWORD"
+          CERTIFICATE_PATH="$RUNNER_TEMP/developer-id-application.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/spendscope-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+          python -c "import base64, os, pathlib; pathlib.Path('$CERTIFICATE_PATH').write_bytes(base64.b64decode(os.environ['APPLE_CERTIFICATE_BASE64']))"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          SIGNING_IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -1)"
+          test -n "$SIGNING_IDENTITY"
+          echo "APPLE_SIGNING_IDENTITY=$SIGNING_IDENTITY" >> "$GITHUB_ENV"
+          echo "APPLE_SIGNING_KEYCHAIN=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
       - name: Build application
         run: python -m PyInstaller --noconfirm --clean packaging/spendscope.spec
+      - name: Sign macOS bundle with hardened runtime
+        if: runner.os == 'macOS' && startsWith(github.ref, 'refs/tags/v')
+        run: |
+          codesign --force --deep --options runtime --timestamp --sign "$APPLE_SIGNING_IDENTITY" dist/SpendScope.app
+          codesign --verify --deep --strict --verbose=2 dist/SpendScope.app
       - name: Smoke test macOS bundle
         if: runner.os == 'macOS'
         env:
@@ -50,6 +77,24 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: .\dist\SpendScope\SpendScope.exe --smoke-test
+      - name: Notarize and staple macOS bundle
+        if: runner.os == 'macOS' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          APPLE_NOTARY_KEY_BASE64: ${{ secrets.APPLE_NOTARY_KEY_BASE64 }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+        run: |
+          test -n "$APPLE_NOTARY_KEY_BASE64"
+          test -n "$APPLE_NOTARY_KEY_ID"
+          test -n "$APPLE_NOTARY_ISSUER_ID"
+          NOTARY_KEY_PATH="$RUNNER_TEMP/AuthKey_${APPLE_NOTARY_KEY_ID}.p8"
+          NOTARY_ARCHIVE="$RUNNER_TEMP/SpendScope-notarization.zip"
+          python -c "import base64, os, pathlib; pathlib.Path('$NOTARY_KEY_PATH').write_bytes(base64.b64decode(os.environ['APPLE_NOTARY_KEY_BASE64']))"
+          ditto -c -k --keepParent dist/SpendScope.app "$NOTARY_ARCHIVE"
+          xcrun notarytool submit "$NOTARY_ARCHIVE" --key "$NOTARY_KEY_PATH" --key-id "$APPLE_NOTARY_KEY_ID" --issuer "$APPLE_NOTARY_ISSUER_ID" --wait
+          xcrun stapler staple dist/SpendScope.app
+          xcrun stapler validate dist/SpendScope.app
+          spctl --assess --type execute --verbose=4 dist/SpendScope.app
       - name: Archive macOS bundle
         if: runner.os == 'macOS'
         run: |
@@ -70,6 +115,9 @@ jobs:
           name: SpendScope-${{ runner.os }}-${{ runner.arch }}
           path: release/*
           if-no-files-found: error
+      - name: Remove temporary Apple keychain
+        if: always() && runner.os == 'macOS' && startsWith(github.ref, 'refs/tags/v')
+        run: security delete-keychain "$APPLE_SIGNING_KEYCHAIN" || true
 
   draft-release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -82,7 +130,7 @@ jobs:
         with:
           path: release-artifacts
           merge-multiple: true
-      - name: Create unsigned draft release
+      - name: Create signed release draft
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
@@ -91,4 +139,4 @@ jobs:
           --draft
           --verify-tag
           --generate-notes
-          --title "SpendScope ${GITHUB_REF_NAME} (unsigned)"
+          --title "SpendScope ${GITHUB_REF_NAME}"
