@@ -10,7 +10,7 @@ from urllib.request import Request, urlopen
 
 from spendscope.branding import SUPPORT_URL
 
-LATEST_RELEASE_API = "https://api.github.com/repos/esthermensah/spendscope/releases/latest"
+RELEASES_API = "https://api.github.com/repos/esthermensah/spendscope/releases?per_page=20"
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,23 +20,33 @@ class UpdateResult:
     update_available: bool
 
 
-def _version_tuple(value: str) -> tuple[int, ...]:
-    match = re.fullmatch(r"v?(\d+(?:\.\d+)*)", value.strip())
+def _version_tuple(value: str) -> tuple[int, int, int, int, int]:
+    match = re.fullmatch(
+        r"v?(\d+)\.(\d+)\.(\d+)(?:[-.]?(alpha|beta|rc)[.-]?(\d+))?",
+        value.strip(),
+        re.IGNORECASE,
+    )
     if match is None:
         raise ValueError(f"Unsupported release version: {value}")
-    return tuple(int(part) for part in match.group(1).split("."))
+    prerelease = match.group(4)
+    stage = 3 if prerelease is None else {"alpha": 0, "beta": 1, "rc": 2}[prerelease.lower()]
+    prerelease_number = 0 if prerelease is None else int(match.group(5))
+    return int(match.group(1)), int(match.group(2)), int(match.group(3)), stage, prerelease_number
 
 
 def check_for_update(current_version: str) -> UpdateResult:
     """Read the latest public release without downloading or installing anything."""
     request = Request(
-        LATEST_RELEASE_API,
+        RELEASES_API,
         headers={"Accept": "application/vnd.github+json", "User-Agent": "SpendScope"},
     )
     with urlopen(request, timeout=8) as response:
-        payload: dict[str, Any] = json.load(response)
-    latest = str(payload["tag_name"])
-    release_url = str(payload.get("html_url") or f"{SUPPORT_URL}/releases/latest")
+        payload: list[dict[str, Any]] = json.load(response)
+    release = next((entry for entry in payload if not entry.get("draft", False)), None)
+    if release is None:
+        raise ValueError("GitHub did not return a published SpendScope release")
+    latest = str(release["tag_name"])
+    release_url = str(release.get("html_url") or f"{SUPPORT_URL}/releases")
     return UpdateResult(
         latest, release_url, _version_tuple(latest) > _version_tuple(current_version)
     )

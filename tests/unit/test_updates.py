@@ -19,7 +19,7 @@ class Response(BytesIO):
 
 def test_update_check_reports_newer_release(monkeypatch: Any) -> None:
     payload = json.dumps(
-        {"tag_name": "v0.2.0", "html_url": "https://github.com/example/releases/v0.2.0"}
+        [{"tag_name": "v0.2.0", "html_url": "https://github.com/example/releases/v0.2.0"}]
     ).encode()
     monkeypatch.setattr("spendscope.services.updates.urlopen", lambda *_a, **_k: Response(payload))
 
@@ -30,15 +30,33 @@ def test_update_check_reports_newer_release(monkeypatch: Any) -> None:
 
 
 def test_update_check_accepts_current_release(monkeypatch: Any) -> None:
-    payload = json.dumps({"tag_name": "v0.1.0"}).encode()
+    payload = json.dumps([{"tag_name": "v0.1.0"}]).encode()
     monkeypatch.setattr("spendscope.services.updates.urlopen", lambda *_a, **_k: Response(payload))
 
     assert not check_for_update("0.1.0").update_available
 
 
 def test_update_check_rejects_an_invalid_release_tag(monkeypatch: Any) -> None:
-    payload = json.dumps({"tag_name": "latest"}).encode()
+    payload = json.dumps([{"tag_name": "latest"}]).encode()
     monkeypatch.setattr("spendscope.services.updates.urlopen", lambda *_a, **_k: Response(payload))
 
     with pytest.raises(ValueError, match="Unsupported release version"):
         check_for_update("0.1.0")
+
+
+def test_update_check_supports_beta_releases(monkeypatch: Any) -> None:
+    payload = json.dumps(
+        [
+            {
+                "tag_name": "v0.1.0-beta.3",
+                "html_url": "https://github.com/example/releases/v0.1.0-beta.3",
+                "prerelease": True,
+            }
+        ]
+    ).encode()
+    monkeypatch.setattr("spendscope.services.updates.urlopen", lambda *_a, **_k: Response(payload))
+
+    result = check_for_update("0.1.0-beta.2")
+
+    assert result.update_available
+    assert result.latest_version == "v0.1.0-beta.3"

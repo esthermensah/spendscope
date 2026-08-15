@@ -93,13 +93,14 @@ def test_main_window_exposes_dashboard_and_workflows(
     assert window.recent.accessibleName() == "Recent confirmed expenses"
     assert " of " in window.cards["storage"].value.text()
     assert "total capacity" in window.cards["storage"].toolTip()
-    assert window.prompt.text() == FINANCIAL_PROMPTS[0]
+    assert window.prompt.text() == f"“{FINANCIAL_PROMPTS[0]}”"
+    assert window.prompt.font().italic()
     assert window.quote_timer.interval() == 60 * 60 * 1000
     assert window.workspace_label.text() == "On this Mac  •  Local receipts and spending data"
     assert window.findChild(QWidget, "contentColumn").maximumWidth() == 1120
     assert window.findChild(QFrame, "shortcutPanel") is None
     window._advance_prompt()
-    assert window.prompt.text() == FINANCIAL_PROMPTS[1]
+    assert window.prompt.text() == f"“{FINANCIAL_PROMPTS[1]}”"
     assert window.report_button.text() == "Connect Google"
     assert [button.text() for button in window.navigation_buttons] == [
         "Receipts",

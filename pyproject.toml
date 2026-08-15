@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "spendscope"
-version = "0.1.0"
+version = "0.1.0b2"
 description = "Local-first item-level spending analysis"
 readme = "README.md"
 requires-python = ">=3.11"

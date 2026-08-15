@@ -97,6 +97,7 @@ if sys.platform == "darwin":
             "CFBundleDisplayName": "SpendScope",
             "CFBundleName": "SpendScope",
             "CFBundleShortVersionString": "0.1.0",
+            "CFBundleVersion": "2",
             "NSHighResolutionCapable": True,
             "NSRequiresAquaSystemAppearance": False,
         },

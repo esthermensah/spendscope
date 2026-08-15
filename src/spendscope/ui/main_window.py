@@ -388,8 +388,11 @@ class MainWindow(QMainWindow):
         heading = QLabel("See where your money is going")
         heading.setObjectName("pageHeading")
         self.prompt_index = 0
-        self.prompt = QLabel(FINANCIAL_PROMPTS[self.prompt_index])
+        self.prompt = QLabel(f"“{FINANCIAL_PROMPTS[self.prompt_index]}”")
         self.prompt.setObjectName("pageSubtitle")
+        prompt_font = self.prompt.font()
+        prompt_font.setItalic(True)
+        self.prompt.setFont(prompt_font)
         self.prompt.setWordWrap(True)
         self.prompt.setAccessibleName("Financial reflection")
         self.workspace_label = QLabel("On this Mac  •  Local receipts and spending data")
@@ -629,7 +632,7 @@ class MainWindow(QMainWindow):
 
     def _advance_prompt(self) -> None:
         self.prompt_index = (self.prompt_index + 1) % len(FINANCIAL_PROMPTS)
-        self.prompt.setText(FINANCIAL_PROMPTS[self.prompt_index])
+        self.prompt.setText(f"“{FINANCIAL_PROMPTS[self.prompt_index]}”")
 
     def choose_receipts(self) -> None:
         selected, _ = QFileDialog.getOpenFileNames(
