@@ -25,6 +25,7 @@ from spendscope.services.review import ReviewService
 from spendscope.ui.application import default_config_path
 from spendscope.ui.controller import DesktopController
 from spendscope.ui.dialogs import (
+    CategoryManagerDialog,
     ManualEntryDialog,
     ReviewDialog,
     SettingsDialog,
@@ -96,7 +97,6 @@ def test_main_window_exposes_dashboard_and_workflows(
     assert window.prompt.text() == f"“{FINANCIAL_PROMPTS[0]}”"
     assert window.prompt.font().italic()
     assert window.quote_timer.interval() == 60 * 60 * 1000
-    assert window.workspace_label.text() == "On this Mac  •  Local receipts and spending data"
     assert window.findChild(QWidget, "contentColumn").maximumWidth() == 1120
     assert window.findChild(QFrame, "shortcutPanel") is None
     window._advance_prompt()
@@ -218,6 +218,25 @@ def test_manual_and_review_dialogs_render_offscreen(
     review = ReviewDialog(desktop_controller)
     assert review.list.count() == 0
     assert not review.confirm.isEnabled()
+
+
+def test_categories_can_be_added_and_renamed_from_desktop(
+    qt_application: QApplication, desktop_controller: DesktopController
+) -> None:
+    internal, display = desktop_controller.add_category("  Self   care  ")
+    assert display == "Self care"
+    assert (internal, display) in desktop_controller.categories()
+
+    renamed = desktop_controller.rename_category(internal, "Wellness")
+    assert renamed == (internal, "Wellness")
+    assert (internal, "Wellness") in desktop_controller.categories()
+
+    dialog = CategoryManagerDialog(desktop_controller)
+    assert dialog.windowTitle() == "Manage categories"
+    assert any(
+        dialog.categories_list.item(row).text() == "Wellness"
+        for row in range(dialog.categories_list.count())
+    )
 
 
 def _create_review_receipt(controller: DesktopController) -> int:

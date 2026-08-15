@@ -13,6 +13,36 @@ from spendscope.domain.models import (
 from spendscope.ui.controller import DesktopController
 
 
+def test_custom_category_can_be_added_and_renamed_without_changing_its_key(
+    tmp_path: Path,
+) -> None:
+    config = initialize_configured_workspace(AppConfig(root_folder=tmp_path / "workspace"))
+    config_path = tmp_path / "settings.json"
+    save_config(config, config_path)
+    controller = DesktopController(config, config_path)
+    try:
+        internal, display = controller.add_category("  Self   care  ")
+        assert display == "Self care"
+
+        controller.create_manual(
+            ManualExpenseDraft(
+                transaction_date=date(2026, 8, 14),
+                description="Haircut",
+                category_internal_name=internal,
+                amount_minor=4500,
+                currency="USD",
+            )
+        )
+
+        renamed_internal, renamed_display = controller.rename_category(internal, "Wellness")
+        assert renamed_internal == internal
+        assert renamed_display == "Wellness"
+        assert (internal, "Wellness") in controller.categories()
+        assert controller.dashboard(date(2026, 8, 14)).category_spending == (("Wellness", 4500),)
+    finally:
+        controller.close()
+
+
 def test_confirmed_expense_can_be_recategorized_and_queued(tmp_path: Path) -> None:
     config = initialize_configured_workspace(AppConfig(root_folder=tmp_path / "workspace"))
     config_path = tmp_path / "settings.json"

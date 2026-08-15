@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
+    QListWidgetItem,
     QMessageBox,
     QPushButton,
     QSpinBox,
@@ -711,6 +712,15 @@ class SettingsDialog(QDialog):
         form.addRow("Appearance", self.appearance)
         form.addRow("Default currency", self.currency)
         form.addRow("Compression quality", self.quality)
+        category_heading = QLabel("Spending categories")
+        category_heading.setObjectName("sectionHeading")
+        category_help = QLabel(
+            "Add your own categories or rename the ones you use. Existing expenses stay intact."
+        )
+        category_help.setObjectName("secondaryText")
+        category_help.setWordWrap(True)
+        manage_categories = QPushButton("Manage categories")
+        manage_categories.clicked.connect(self._manage_categories)
         google_heading = QLabel("Google Drive report")
         google_heading.setObjectName("sectionHeading")
         self.google_status = QLabel()
@@ -734,11 +744,17 @@ class SettingsDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout = QVBoxLayout(self)
         layout.addLayout(form)
+        layout.addWidget(category_heading)
+        layout.addWidget(category_help)
+        layout.addWidget(manage_categories)
         layout.addWidget(google_heading)
         layout.addWidget(self.google_status)
         layout.addLayout(google_actions)
         layout.addWidget(buttons)
         self._refresh_google_status()
+
+    def _manage_categories(self) -> None:
+        CategoryManagerDialog(self.controller, self).exec()
 
     def _connect_google(self) -> None:
         path = bundled_client_secrets()
@@ -831,6 +847,85 @@ class SettingsDialog(QDialog):
             QMessageBox.critical(self, "Settings could not be saved", str(error))
             return
         self.accept()
+
+
+class CategoryManagerDialog(QDialog):
+    """Allow people to add and rename categories without losing expense links."""
+
+    def __init__(self, controller: DesktopController, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.controller = controller
+        self.setWindowTitle("Manage categories")
+        self.resize(520, 480)
+        title = QLabel("Your categories")
+        title.setObjectName("dialogTitle")
+        help_text = QLabel(
+            "Add a category for future expenses, or select one below and change its name."
+        )
+        help_text.setObjectName("secondaryText")
+        help_text.setWordWrap(True)
+        self.categories_list = QListWidget()
+        self.categories_list.currentItemChanged.connect(self._selection_changed)
+        self.name = QLineEdit()
+        self.name.setPlaceholderText("Category name")
+        add = QPushButton("Add category")
+        add.setObjectName("primaryAction")
+        self.rename = QPushButton("Rename selected")
+        self.rename.setEnabled(False)
+        add.clicked.connect(self._add)
+        self.rename.clicked.connect(self._rename)
+        self.name.returnPressed.connect(self._add)
+        actions = QHBoxLayout()
+        actions.addWidget(add)
+        actions.addWidget(self.rename)
+        close = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        close.rejected.connect(self.reject)
+        layout = QVBoxLayout(self)
+        layout.addWidget(title)
+        layout.addWidget(help_text)
+        layout.addWidget(self.categories_list, 1)
+        layout.addWidget(self.name)
+        layout.addLayout(actions)
+        layout.addWidget(close)
+        self._refresh()
+
+    def _refresh(self, selected_internal: str | None = None) -> None:
+        self.categories_list.clear()
+        for internal, display in self.controller.categories():
+            item = QListWidgetItem(display)
+            item.setData(Qt.ItemDataRole.UserRole, internal)
+            self.categories_list.addItem(item)
+            if internal == selected_internal:
+                self.categories_list.setCurrentItem(item)
+
+    def _selection_changed(
+        self, current: QListWidgetItem | None, _previous: QListWidgetItem | None
+    ) -> None:
+        self.rename.setEnabled(current is not None)
+        if current is not None:
+            self.name.setText(current.text())
+
+    def _add(self) -> None:
+        try:
+            internal, _display = self.controller.add_category(self.name.text())
+        except (ValueError, LookupError) as error:
+            QMessageBox.warning(self, "Category could not be added", str(error))
+            return
+        self.name.clear()
+        self._refresh(internal)
+
+    def _rename(self) -> None:
+        current = self.categories_list.currentItem()
+        if current is None:
+            return
+        try:
+            internal, _display = self.controller.rename_category(
+                str(current.data(Qt.ItemDataRole.UserRole)), self.name.text()
+            )
+        except (ValueError, LookupError) as error:
+            QMessageBox.warning(self, "Category could not be renamed", str(error))
+            return
+        self._refresh(internal)
 
 
 def format_bytes(value: int) -> str:

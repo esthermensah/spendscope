@@ -164,12 +164,6 @@ def _stylesheet(colors: ThemeColors) -> str:
         QLabel#metricDetail {{ color: {colors.muted}; font-size: 11px; }}
         QLabel#sectionHeading {{ font-size: 19px; font-weight: 700; }}
         QLabel#sectionSubtitle {{ color: {colors.muted}; font-size: 13px; }}
-        QLabel#workspacePill {{
-            color: {colors.muted};
-            background-color: {colors.surface_alt};
-            border-radius: 10px;
-            padding: 5px 10px;
-        }}
         QLabel#emptyTitle {{ font-size: 16px; font-weight: 650; }}
         QFrame#heroPanel {{
             background-color: {colors.surface};

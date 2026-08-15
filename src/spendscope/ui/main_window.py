@@ -395,22 +395,14 @@ class MainWindow(QMainWindow):
         self.prompt.setFont(prompt_font)
         self.prompt.setWordWrap(True)
         self.prompt.setAccessibleName("Financial reflection")
-        self.workspace_label = QLabel("On this Mac  •  Local receipts and spending data")
-        self.workspace_label.setObjectName("workspacePill")
-        self.workspace_label.setToolTip(
-            f"SpendScope stores its private local files here:\n{self.controller.config.root_folder}"
-        )
-        self.workspace_label.setMaximumWidth(520)
         hero_layout = QVBoxLayout()
         hero_layout.setContentsMargins(32, 28, 32, 28)
         hero_layout.setSpacing(7)
         hero_layout.addWidget(heading)
         hero_layout.addWidget(self.prompt)
-        hero_layout.addSpacing(5)
-        hero_layout.addWidget(self.workspace_label)
         hero = QFrame()
         hero.setObjectName("heroPanel")
-        hero.setMinimumHeight(260)
+        hero.setMinimumHeight(220)
         hero.setLayout(hero_layout)
 
         self.cards = {

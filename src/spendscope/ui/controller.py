@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -22,6 +23,7 @@ from spendscope.database.schema import (
 from spendscope.domain.enums import ReceiptStatus, ReviewStatus
 from spendscope.domain.models import (
     BudgetDraft,
+    CategoryDraft,
     ManualExpenseDraft,
     ReceiptCorrectionDraft,
     RefundDraft,
@@ -174,6 +176,47 @@ class DesktopController:
                 (record.internal_name, record.display_name)
                 for record in CategoryRepository(session).list_active()
             ]
+
+    def add_category(self, display_name: str) -> tuple[str, str]:
+        """Create a user category and return its stable key and visible name."""
+        normalized = " ".join(display_name.split())
+        if not normalized or len(normalized) > 80:
+            raise ValueError("category name must contain 1 to 80 characters")
+        base = re.sub(r"[^a-z0-9]+", "_", normalized.casefold()).strip("_")
+        if not base or not base[0].isalpha():
+            base = f"category_{base}" if base else "category"
+        with session_scope(self.engine) as session:
+            repository = CategoryRepository(session)
+            if any(
+                record.display_name.casefold() == normalized.casefold()
+                for record in repository.list_active()
+            ):
+                raise ValueError("a category with that name already exists")
+            internal_name = base
+            suffix = 2
+            while repository.get_by_internal_name(internal_name) is not None:
+                internal_name = f"{base}_{suffix}"
+                suffix += 1
+            record = repository.create(
+                CategoryDraft(internal_name=internal_name, display_name=normalized)
+            )
+            return record.internal_name, record.display_name
+
+    def rename_category(self, internal_name: str, display_name: str) -> tuple[str, str]:
+        """Rename a category without changing its links to existing expenses."""
+        normalized = " ".join(display_name.split())
+        with session_scope(self.engine) as session:
+            repository = CategoryRepository(session)
+            record = repository.get_by_internal_name(internal_name)
+            if record is None or not record.active:
+                raise LookupError("category no longer exists")
+            if any(
+                other.id != record.id and other.display_name.casefold() == normalized.casefold()
+                for other in repository.list_active()
+            ):
+                raise ValueError("a category with that name already exists")
+            renamed = repository.rename(record, normalized)
+            return renamed.internal_name, renamed.display_name
 
     def pending_receipts(self) -> list[ReviewReceipt]:
         with session_scope(self.engine) as session:
