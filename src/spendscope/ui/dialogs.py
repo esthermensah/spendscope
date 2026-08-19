@@ -137,6 +137,8 @@ class ReviewDialog(QDialog):
             "Edit expense" if confirmed_receipt_id is not None else "Review receipts"
         )
         self.resize(1080, 720)
+        self.setMinimumSize(760, 520)
+        self.setSizeGripEnabled(True)
         self._loading = False
         self.list = QListWidget()
         self.list.setMinimumWidth(250)
@@ -159,8 +161,11 @@ class ReviewDialog(QDialog):
         self.tip = self._money_input()
         self.discount = self._money_input()
         self.total = self._money_input()
-        for field in (self.subtotal, self.tax, self.tip, self.discount, self.total):
+        for field in (self.subtotal, self.tax, self.tip, self.discount):
             field.valueChanged.connect(self._update_reconciliation)
+        self.total.setReadOnly(True)
+        for field in (self.subtotal, self.tax, self.tip, self.discount):
+            field.valueChanged.connect(self._update_total)
         details = QFormLayout()
         details.addRow("Merchant", self.merchant)
         details.addRow("Date", self.when)
@@ -173,6 +178,8 @@ class ReviewDialog(QDialog):
 
         self.items = QTableWidget(0, 3)
         self.items.setHorizontalHeaderLabels(["Description", "Amount", "Category"])
+        self.items.setMinimumHeight(300)
+        self.items.verticalHeader().setDefaultSectionSize(48)
         self.items.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.items.horizontalHeader().setSectionResizeMode(
             1, QHeaderView.ResizeMode.ResizeToContents
@@ -196,9 +203,12 @@ class ReviewDialog(QDialog):
         self.confirm.setObjectName("primaryAction")
         self.reject_button = QPushButton("Reject receipt")
         self.reject_button.setVisible(confirmed_receipt_id is None)
+        self.delete_button = QPushButton("Delete expense")
+        self.delete_button.setVisible(confirmed_receipt_id is not None)
         self.open_source = QPushButton("Open source")
         self.confirm.clicked.connect(lambda: self._resolve(True))
         self.reject_button.clicked.connect(lambda: self._resolve(False))
+        self.delete_button.clicked.connect(self._delete_expense)
         self.open_source.clicked.connect(self._open_source)
         metadata = QVBoxLayout()
         metadata.addWidget(self.reason)
@@ -220,6 +230,7 @@ class ReviewDialog(QDialog):
         actions = QHBoxLayout()
         actions.addWidget(self.open_source)
         actions.addStretch()
+        actions.addWidget(self.delete_button)
         actions.addWidget(self.reject_button)
         actions.addWidget(self.confirm)
         title = QLabel("Edit expense" if confirmed_receipt_id is not None else "Review receipts")
@@ -333,6 +344,7 @@ class ReviewDialog(QDialog):
                 item.category_internal_name,
             )
         self._loading = False
+        self._update_total()
         self._update_reconciliation()
         path_value = receipt.source_path
         if not path_value:
@@ -385,6 +397,7 @@ class ReviewDialog(QDialog):
         self.items.setItem(row, 0, description_item)
         amount = self._money_input()
         amount.setValue(line_total_minor / 100)
+        amount.valueChanged.connect(self._line_amount_changed)
         amount.valueChanged.connect(self._update_reconciliation)
         self.items.setCellWidget(row, 1, amount)
         category = QComboBox()
@@ -404,7 +417,20 @@ class ReviewDialog(QDialog):
         row = self.items.currentRow()
         if row >= 0:
             self.items.removeRow(row)
+            self._sync_subtotal_to_items()
             self._update_reconciliation()
+
+    def _line_amount_changed(self, *_args: object) -> None:
+        self._sync_subtotal_to_items()
+        self._update_reconciliation()
+
+    def _sync_subtotal_to_items(self) -> None:
+        if self._loading or not self.items.rowCount():
+            return
+        subtotal = sum(self._row_amount(row).value() for row in range(self.items.rowCount()))
+        self.subtotal.blockSignals(True)
+        self.subtotal.setValue(subtotal)
+        self.subtotal.blockSignals(False)
 
     def _update_reconciliation(self, *_args: object) -> None:
         if self._loading:
@@ -428,6 +454,14 @@ class ReviewDialog(QDialog):
         else:
             self.reconciliation.setText("Balanced — this receipt is ready to confirm.")
             self.confirm.setEnabled(bool(self.rows))
+
+    def _update_total(self, *_args: object) -> None:
+        if self._loading:
+            return
+        self.total.setValue(
+            self.subtotal.value() + self.tax.value() + self.tip.value() - self.discount.value()
+        )
+        self._update_reconciliation()
 
     def _row_amount(self, row: int) -> QDoubleSpinBox:
         return self.items.cellWidget(row, 1)  # type: ignore[return-value]
@@ -475,6 +509,26 @@ class ReviewDialog(QDialog):
         index = self.list.currentRow()
         if 0 <= index < len(self.rows) and self.rows[index].source_path:
             QDesktopServices.openUrl(QUrl.fromLocalFile(self.rows[index].source_path or ""))
+
+    def _delete_expense(self) -> None:
+        if self.confirmed_receipt_id is None:
+            return
+        answer = QMessageBox.question(
+            self,
+            "Delete this expense?",
+            "This removes the expense from SpendScope and queues its removal from Google Sheets.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self.controller.delete_receipt(self.confirmed_receipt_id)
+        except (LookupError, OSError, ValueError) as error:
+            QMessageBox.critical(self, "Expense could not be deleted", str(error))
+            return
+        self.receipt_resolved.emit()
+        self.accept()
 
     def _resolve(self, confirm: bool) -> None:
         index = self.list.currentRow()

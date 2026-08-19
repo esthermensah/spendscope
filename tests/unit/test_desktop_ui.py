@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPalette
+from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication, QFrame, QLineEdit, QPushButton, QWidget
 from sqlalchemy import select
 
@@ -115,6 +115,26 @@ def test_main_window_exposes_dashboard_and_workflows(
     assert window.review_action.property("tone") == "coral"
     assert window.sync_action.property("tone") == "teal"
     assert "Review receipts" in window.review_action.title.text()
+    assert window.cards["inbox"].property("interactive") is True
+    assert not window.process_button.isVisible()
+    window.close()
+
+
+def test_waiting_receipt_has_visible_processing_action(
+    qt_application: QApplication, desktop_controller: DesktopController, tmp_path: Path
+) -> None:
+    source = tmp_path / "amazon-order.png"
+    Image.new("RGB", (240, 320), "white").save(source)
+    imported, rejected = desktop_controller.import_receipts([source])
+    assert len(imported) == 1
+    assert not rejected
+
+    window = MainWindow(desktop_controller)
+
+    assert window.cards["inbox"].value.text() == "1"
+    assert window.cards["inbox"].detail.text() == "Click to process now"
+    assert window.process_button.text() == "Process 1 waiting receipt"
+    assert not window.process_button.isHidden()
     window.close()
 
 
@@ -207,6 +227,12 @@ def test_embedded_themes_style_text_inputs_and_buttons(
     assert field.palette().color(QPalette.ColorRole.Text).name() == expected.text
     assert button.palette().color(QPalette.ColorRole.ButtonText).name() == expected.text
     assert expected.disabled_text in qt_application.styleSheet()
+
+
+def test_light_mode_action_cards_use_deep_colors() -> None:
+    colors = THEMES[Theme.LIGHT]
+    for value in (colors.action_teal, colors.action_gold, colors.action_coral):
+        assert QColor(value).lightnessF() < 0.55
 
 
 def test_manual_and_review_dialogs_render_offscreen(

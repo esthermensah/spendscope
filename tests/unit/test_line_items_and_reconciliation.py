@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from spendscope.parsing.line_item_parser import parse_line_items
+from spendscope.parsing.line_item_parser import parse_amazon_tabular_items, parse_line_items
 from spendscope.parsing.validators import reconcile_receipt
 
 
@@ -33,6 +33,22 @@ def test_line_item_parser_ignores_mobile_order_status_and_address_numbers() -> N
     )
 
     assert items == ()
+
+
+def test_amazon_tabular_parser_extracts_rows_and_total_column() -> None:
+    items = parse_amazon_tabular_items(
+        [
+            "Currency Product Name Shipment Item Total Amount Website",
+            "Clorox Corner Toilet Bowl Brush, White",
+            "USD 1 Visa - 4116 White 38.43 2.49 Shipped 9.57 0 8.99 0.58 Amazon.com",
+            (
+                "USD 1 Discover - 6794 Gain Laundry Detergent 38.43 2.49 Shipped "
+                "26.59 0 24.97 1.62 Amazon.com"
+            ),
+        ]
+    )
+    assert [item.line_total for item in items] == [Decimal("9.57"), Decimal("26.59")]
+    assert items[0].description.endswith("White")
 
 
 def test_reconciliation_balanced_rounding_review_and_missing() -> None:

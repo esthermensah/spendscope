@@ -265,6 +265,12 @@ class MainWindow(QMainWindow):
         self.quote_timer.setInterval(60 * 60 * 1000)
         self.quote_timer.timeout.connect(self._advance_prompt)
         self.quote_timer.start()
+        self._processing_active = False
+        self._last_auto_process_signature: tuple[tuple[str, int, int], ...] = ()
+        self.inbox_timer = QTimer(self)
+        self.inbox_timer.setInterval(5000)
+        self.inbox_timer.timeout.connect(self._auto_process_new_inbox_files)
+        self.inbox_timer.start()
         self.statusBar().showMessage(f"Workspace: {controller.config.root_folder}")
         self.refresh()
 
@@ -416,6 +422,10 @@ class MainWindow(QMainWindow):
         self.cards["storage"].setCursor(Qt.CursorShape.PointingHandCursor)
         self.cards["storage"].setToolTip("View storage details and cleanup options.")
         self.cards["storage"].clicked.connect(self.open_storage)
+        self.cards["inbox"].setProperty("interactive", True)
+        self.cards["inbox"].setCursor(Qt.CursorShape.PointingHandCursor)
+        self.cards["inbox"].setToolTip("Process receipts waiting in the Inbox.")
+        self.cards["inbox"].clicked.connect(self.process_receipts)
         cards = QGridLayout()
         cards.setHorizontalSpacing(12)
         cards.setVerticalSpacing(12)
@@ -427,17 +437,22 @@ class MainWindow(QMainWindow):
         import_copy = QLabel("Drop it here or choose a JPG, PNG, or PDF.")
         import_copy.setObjectName("sectionSubtitle")
         import_copy.setWordWrap(True)
-        primary = QPushButton("Import receipt files")
-        primary.setObjectName("primaryAction")
-        primary.setAccessibleName("Choose receipt files to import and process")
-        primary.clicked.connect(self.choose_receipts)
+        self.import_button = QPushButton("Import receipt files")
+        self.import_button.setObjectName("primaryAction")
+        self.import_button.setAccessibleName("Choose receipt files to import and process")
+        self.import_button.clicked.connect(self.choose_receipts)
+        self.process_button = QPushButton("Process waiting receipts")
+        self.process_button.setAccessibleName("Process receipts waiting in the Inbox")
+        self.process_button.clicked.connect(self.process_receipts)
+        self.process_button.hide()
         import_layout = QVBoxLayout()
         import_layout.setContentsMargins(24, 24, 24, 24)
         import_layout.setSpacing(8)
         import_layout.addWidget(import_title)
         import_layout.addWidget(import_copy)
         import_layout.addStretch()
-        import_layout.addWidget(primary)
+        import_layout.addWidget(self.import_button)
+        import_layout.addWidget(self.process_button)
         import_panel = QFrame()
         import_panel.setObjectName("importPanel")
         import_panel.setFixedSize(260, 260)
@@ -565,6 +580,16 @@ class MainWindow(QMainWindow):
             budget = f"{money_text(remaining, currency)} left"
         self.cards["budget"].value.setText(budget)
         self.cards["inbox"].value.setText(str(snapshot.inbox_count))
+        if snapshot.inbox_count:
+            receipt_word = "receipt" if snapshot.inbox_count == 1 else "receipts"
+            self.cards["inbox"].detail.setText("Click to process now")
+            self.process_button.setText(
+                f"Process {snapshot.inbox_count} waiting {receipt_word}"
+            )
+            self.process_button.show()
+        else:
+            self.cards["inbox"].detail.setText("Waiting to be processed")
+            self.process_button.hide()
         self.cards["review"].value.setText(str(snapshot.review_count))
         self.cards["sync"].value.setText(str(snapshot.pending_sync))
         review_label = (
@@ -660,6 +685,10 @@ class MainWindow(QMainWindow):
         event.acceptProposedAction()
 
     def process_receipts(self) -> None:
+        if self._processing_active:
+            return
+        self._processing_active = True
+        self.process_button.setEnabled(False)
         self.progress = QProgressDialog("Reading receipts from Inbox…", "", 0, 0, self)
         self.progress.setWindowTitle("Processing receipts")
         self.progress.setCancelButton(None)
@@ -707,7 +736,24 @@ class MainWindow(QMainWindow):
                                 f"{entry.path.name}: {result.reason or 'processing failed'}"
                             )
                     elif entry.status is IntakeStatus.DUPLICATE:
-                        duplicates += 1
+                        existing = storage.repository.get(entry.record_id or 0)
+                        if existing is not None and existing.processing_status == "failed":
+                            result = service.process(entry.path, existing.id)
+                            if result.status == "failed":
+                                failed += 1
+                                errors.append(
+                                    f"{entry.path.name}: {result.reason or 'processing failed'}"
+                                )
+                            else:
+                                needs_review += 1
+                        elif existing is not None and existing.processing_status == "needs_review":
+                            result = service.reprocess_needs_review(entry.path, existing.id)
+                            if result.status in {"high", "medium", "low", "failed"}:
+                                needs_review += 1
+                            else:
+                                duplicates += 1
+                        else:
+                            duplicates += 1
                     else:
                         invalid += 1
                         errors.append(f"{entry.path.name}: {entry.reason or 'invalid file'}")
@@ -723,6 +769,8 @@ class MainWindow(QMainWindow):
             engine.dispose()
 
     def _processing_finished(self, result: object) -> None:
+        self._processing_active = False
+        self.process_button.setEnabled(True)
         if self.progress is not None:
             self.progress.close()
         summary = cast(ProcessingSummary, result)
@@ -745,9 +793,34 @@ class MainWindow(QMainWindow):
             self.open_review()
 
     def _processing_failed(self, message: str) -> None:
+        self._processing_active = False
+        self.process_button.setEnabled(True)
         if self.progress is not None:
             self.progress.close()
         QMessageBox.critical(self, "Receipt processing failed", message)
+
+    def _auto_process_new_inbox_files(self) -> None:
+        """Notice files synced into Inbox without requiring a manual menu action."""
+        if self._processing_active:
+            return
+        inbox = self.controller.config.directory_paths()["inbox"]
+        if not inbox.exists():
+            return
+        files = tuple(
+            sorted(
+                (
+                    str(path.resolve()),
+                    path.stat().st_size,
+                    path.stat().st_mtime_ns,
+                )
+                for path in inbox.iterdir()
+                if path.is_file()
+            )
+        )
+        snapshot = self.controller.dashboard()
+        if snapshot.inbox_count and files != self._last_auto_process_signature:
+            self._last_auto_process_signature = files
+            self.process_receipts()
 
     def sync_report(self) -> None:
         self.progress = QProgressDialog("Synchronizing the report…", "", 0, 0, self)

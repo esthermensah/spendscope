@@ -61,12 +61,12 @@ THEMES = {
         accent_border="#0d5948",
         accent_soft="#e5f4ef",
         warm_surface="#fff8e9",
-        action_teal="#d9f2e9",
-        action_teal_hover="#c5eadd",
-        action_gold="#fff0bd",
-        action_gold_hover="#f9e39a",
-        action_coral="#fbe0dc",
-        action_coral_hover="#f5cbc5",
+        action_teal="#176f5e",
+        action_teal_hover="#125c4e",
+        action_gold="#795916",
+        action_gold_hover="#65490f",
+        action_coral="#a94f49",
+        action_coral_hover="#8f403b",
         selection_text="#ffffff",
         disabled_text="#7b8794",
         disabled_surface="#e5eaf0",
@@ -184,6 +184,10 @@ def _stylesheet(colors: ThemeColors) -> str:
             background-color: {colors.surface};
             border: 1px solid {colors.border};
             border-radius: 14px;
+        }}
+        QFrame#metricCard[interactive="true"]:hover {{
+            background-color: {colors.accent_soft};
+            border-color: {colors.accent};
         }}
         QFrame#metricAccent {{
             background-color: {colors.accent};

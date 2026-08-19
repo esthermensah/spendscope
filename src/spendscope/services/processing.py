@@ -7,6 +7,7 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from spendscope.categorization.memory import CorrectionMemory
@@ -18,9 +19,9 @@ from spendscope.database.repositories import (
     ProcessedFileRepository,
     ReceiptRepository,
 )
-from spendscope.database.schema import ReceiptRecord
+from spendscope.database.schema import ProcessedFileRecord, ReceiptRecord
 from spendscope.database.service_repositories import AuditRepository
-from spendscope.domain.enums import ReviewSeverity, SourceType
+from spendscope.domain.enums import ReconciliationStatus, ReviewSeverity, SourceType
 from spendscope.domain.models import LineItemDraft, Money, ReceiptDraft
 from spendscope.extraction.receipt_extractor import ReceiptTextExtractor
 from spendscope.parsing.models import ParsedReceipt
@@ -264,10 +265,70 @@ class ReceiptProcessingService:
         elif record.archive_path is not None:
             destination = Path(record.archive_path)
         self.files.update_lifecycle(
-            record, status="failed", destination=destination, error_message=reason
+            record,
+            status="needs_review" if destination is not None else "failed",
+            destination=destination,
+            error_message=reason,
         )
+        self._create_failed_receipt(record, reason)
         self.audit.record("processed_file", processed_file_id, "failed")
         return ProcessingResult(processed_file_id, None, "failed", reason=reason)
+
+    def recover_needs_review(self, processed_file_id: int) -> bool:
+        """Backfill a visible review row for an older failed intake record."""
+        record = self.files.get(processed_file_id)
+        if record is None or record.processing_status != "needs_review":
+            return False
+        before = self.session.scalar(
+            select(ReceiptRecord).where(ReceiptRecord.source_file_hash == record.file_hash)
+        )
+        self._create_failed_receipt(record, record.error_message or "Receipt needs review")
+        return before is None
+
+    def reprocess_needs_review(self, path: Path, processed_file_id: int) -> ProcessingResult:
+        """Re-run extraction for an older placeholder review row."""
+        record = self.files.get(processed_file_id)
+        if record is None:
+            raise LookupError(f"processed file {processed_file_id} does not exist")
+        placeholder = self.session.scalar(
+            select(ReceiptRecord).where(ReceiptRecord.source_file_hash == record.file_hash)
+        )
+        if placeholder is not None and placeholder.merchant_original == "Unidentified receipt":
+            self.session.delete(placeholder)
+            self.session.flush()
+        return self.process(path, processed_file_id)
+
+    def _create_failed_receipt(self, record: ProcessedFileRecord, reason: str) -> None:
+        """Create an editable review row when extraction cannot produce receipt fields."""
+        existing = self.session.scalar(
+            select(ReceiptRecord).where(ReceiptRecord.source_file_hash == record.file_hash)
+        )
+        if existing is not None:
+            return
+        CategoryRepository(self.session).seed_defaults()
+        receipt = ReceiptRepository(self.session).create(
+            ReceiptDraft(
+                merchant_original="Unidentified receipt",
+                merchant_normalized="unidentified receipt",
+                transaction_date=datetime.fromtimestamp(
+                    Path(record.archive_path or record.original_path).stat().st_mtime
+                ).date(),
+                currency=self.config.default_currency,
+                subtotal_minor=0,
+                final_total_minor=0,
+                calculated_total_minor=0,
+                reconciliation_difference_minor=0,
+                reconciliation_status=ReconciliationStatus.NEEDS_REVIEW,
+                source_type=SourceType.PDF
+                if Path(record.original_path).suffix.casefold() == ".pdf"
+                else SourceType.IMAGE,
+                source_file_name=record.file_name,
+                source_file_original_path=record.original_path,
+                source_file_hash=record.file_hash,
+                extraction_confidence=0,
+            )
+        )
+        ReviewService(self.session).flag(receipt, reason, severity=ReviewSeverity.HIGH)
 
     @staticmethod
     def _minor(value: Decimal | None, currency: str) -> int | None:

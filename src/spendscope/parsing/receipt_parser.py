@@ -8,9 +8,9 @@ from decimal import Decimal
 from spendscope.parsing.amount_parser import parse_labeled_amount
 from spendscope.parsing.currency_parser import parse_currency
 from spendscope.parsing.date_parser import parse_date
-from spendscope.parsing.line_item_parser import parse_line_items
+from spendscope.parsing.line_item_parser import parse_amazon_tabular_items, parse_line_items
 from spendscope.parsing.merchant_parser import parse_merchant, parse_receipt_number
-from spendscope.parsing.models import ParsedReceipt
+from spendscope.parsing.models import ParsedReceipt, ParsedValue
 from spendscope.parsing.validators import reconcile_receipt
 
 
@@ -34,7 +34,12 @@ class ReceiptParser:
         imported_at: datetime | None = None,
     ) -> ParsedReceipt:
         lines = [line.strip() for line in text.splitlines() if line.strip()]
-        merchant = parse_merchant(lines)
+        amazon_items = parse_amazon_tabular_items(lines)
+        merchant = (
+            ParsedValue("Amazon", 0.92, ("Amazon",))
+            if amazon_items
+            else parse_merchant(lines)
+        )
         transaction_date, date_source = parse_date(
             text,
             date_locale=self.date_locale,
@@ -43,7 +48,7 @@ class ReceiptParser:
         )
         receipt_number = parse_receipt_number(text)
         currency = parse_currency(text, default_currency=self.default_currency)
-        items = parse_line_items(lines)
+        items = amazon_items or parse_line_items(lines)
         subtotal = parse_labeled_amount(lines, (r"\bsub\s*total\b",))
         tax = parse_labeled_amount(
             lines,
@@ -64,6 +69,22 @@ class ReceiptParser:
             lines,
             (r"(?<!sub)\btotal\b", r"\bamount\s+due\b", r"\bgrand\s+total\b"),
         )
+        if amazon_items and final_total.value is None:
+            inferred_total = sum((item.line_total for item in amazon_items), Decimal("0"))
+            final_total = ParsedValue(
+                inferred_total,
+                0.72,
+                (inferred_total,),
+                ("total inferred by summing Amazon line-item totals",),
+            )
+        if amazon_items and subtotal.value is None:
+            inferred_subtotal = sum((item.line_total for item in amazon_items), Decimal("0"))
+            subtotal = ParsedValue(
+                inferred_subtotal,
+                0.72,
+                (inferred_subtotal,),
+                ("subtotal inferred by summing Amazon line-item totals",),
+            )
         amount_paid = parse_labeled_amount(
             lines, (r"\bamount\s+paid\b", r"\bcash\s+tendered\b", r"\btendered\b")
         )

@@ -161,3 +161,10 @@ class CorrectionService:
         self.sync.enqueue("receipt", receipt.receipt_uuid, "upsert")
         self.session.flush()
         return receipt
+
+    def delete_receipt(self, receipt: ReceiptRecord) -> None:
+        """Delete an expense and queue its removal from the report."""
+        self.sync.enqueue("receipt", receipt.receipt_uuid, "delete")
+        self.audit.record("receipt", receipt.id, "deleted")
+        self.session.delete(receipt)
+        self.session.flush()

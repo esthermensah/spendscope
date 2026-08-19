@@ -16,6 +16,7 @@ from spendscope.database.repositories import CategoryRepository, ProcessedFileRe
 from spendscope.database.schema import (
     CategoryRecord,
     LineItemRecord,
+    ProcessedFileRecord,
     ReceiptRecord,
     ReviewCaseRecord,
     SyncQueueRecord,
@@ -88,8 +89,28 @@ class DesktopController:
     def dashboard(self, today: date | None = None) -> DashboardSnapshot:
         today = today or date.today()
         inbox = self.config.directory_paths()["inbox"]
-        inbox_count = sum(1 for item in inbox.iterdir() if item.is_file()) if inbox.exists() else 0
         with session_scope(self.engine) as session:
+            inbox_files = (
+                [item for item in inbox.iterdir() if item.is_file()] if inbox.exists() else []
+            )
+            inbox_paths = {str(item.resolve()) for item in inbox_files}
+            completed_paths = {
+                path
+                for path in session.scalars(
+                    select(ProcessedFileRecord.original_path).where(
+                        ProcessedFileRecord.original_path.in_(inbox_paths),
+                        ProcessedFileRecord.processing_status.in_(
+                            ("archived", "needs_review", "rejected", "failed")
+                        ),
+                    )
+                )
+            }
+            # Google Drive can leave a cloud-synced copy in Inbox after SpendScope
+            # has already moved the original to Needs Review or Archive. Do not
+            # show that terminal duplicate as a new receipt.
+            inbox_count = sum(
+                1 for item in inbox_files if str(item.resolve()) not in completed_paths
+            )
             review_count = int(
                 session.scalar(
                     select(func.count())
@@ -223,6 +244,7 @@ class DesktopController:
             rows: list[ReviewReceipt] = []
             files = ProcessedFileRepository(session)
             for receipt in ReviewService(session).pending_receipts():
+                self._ensure_line_item(session, receipt)
                 source = receipt.source_file_archive_path or receipt.source_file_original_path
                 if (not source or not Path(source).exists()) and receipt.source_file_hash:
                     file_record = files.get_by_hash(receipt.source_file_hash)
@@ -276,6 +298,7 @@ class DesktopController:
             )
             if receipt is None:
                 raise LookupError("Confirmed expense no longer exists")
+            self._ensure_line_item(session, receipt)
             source = receipt.source_file_archive_path or receipt.source_file_original_path
             return ReviewReceipt(
                 id=receipt.id,
@@ -300,6 +323,29 @@ class DesktopController:
                 ),
             )
 
+    @staticmethod
+    def _ensure_line_item(session: Session, receipt: ReceiptRecord) -> None:
+        """Give legacy single-total receipts one editable, unallocated item."""
+        if receipt.line_items:
+            return
+        category = CategoryRepository(session).seed_defaults()
+        unallocated = next(record for record in category if record.internal_name == "unallocated")
+        receipt.line_items.append(
+            LineItemRecord(
+                item_uuid=f"legacy-{receipt.id}",
+                description_original="Unitemized purchase",
+                description_normalized="unitemized purchase",
+                quantity=1,
+                unit_price_minor=None,
+                line_total_minor=receipt.final_total_minor,
+                category=unallocated,
+                classification_confidence=0,
+                review_status=ReviewStatus.REQUIRED.value,
+                manually_corrected=False,
+            )
+        )
+        session.flush()
+
     def update_confirmed_receipt(self, draft: ReceiptCorrectionDraft) -> None:
         with session_scope(self.engine) as session:
             receipt = session.scalar(
@@ -313,6 +359,18 @@ class DesktopController:
             if receipt is None:
                 raise LookupError("Confirmed expense no longer exists")
             CorrectionService(session).correct_receipt(receipt, draft)
+
+    def delete_receipt(self, receipt_id: int) -> None:
+        with session_scope(self.engine) as session:
+            receipt = session.scalar(
+                select(ReceiptRecord).where(
+                    ReceiptRecord.id == receipt_id,
+                    ReceiptRecord.processing_status == ReceiptStatus.CONFIRMED.value,
+                )
+            )
+            if receipt is None:
+                raise LookupError("Confirmed expense no longer exists")
+            CorrectionService(session).delete_receipt(receipt)
 
     def import_receipts(self, sources: list[Path]) -> tuple[list[Path], list[str]]:
         return ReceiptFileManager(self.config).import_to_inbox(sources)
