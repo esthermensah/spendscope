@@ -330,7 +330,7 @@ class ReviewDialog(QDialog):
             return
         receipt = self.rows[index]
         self.reprocess_button.setVisible(
-            receipt.merchant == "Unidentified receipt"
+            self.confirmed_receipt_id is None or receipt.merchant == "Unidentified receipt"
         )
         self._loading = True
         self.merchant.setText(receipt.merchant)

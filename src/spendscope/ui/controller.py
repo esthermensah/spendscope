@@ -373,11 +373,16 @@ class DesktopController:
             CorrectionService(session).delete_receipt(receipt)
 
     def reprocess_placeholder_receipt(self, receipt_id: int) -> None:
-        """Send an old unidentified receipt through the current Inbox pipeline."""
+        """Send a pending receipt through the current Inbox pipeline."""
         with session_scope(self.engine) as session:
             receipt = session.get(ReceiptRecord, receipt_id)
-            if receipt is None or receipt.merchant_original != "Unidentified receipt":
-                raise ValueError("Only an unidentified receipt can be reprocessed")
+            if receipt is None:
+                raise LookupError("Receipt no longer exists")
+            if (
+                receipt.processing_status == ReceiptStatus.CONFIRMED.value
+                and receipt.merchant_original != "Unidentified receipt"
+            ):
+                raise ValueError("Only pending or unidentified receipts can be reprocessed")
             source_value = receipt.source_file_archive_path or receipt.source_file_original_path
             if not source_value:
                 raise LookupError("The original receipt file could not be found")
