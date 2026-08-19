@@ -330,8 +330,7 @@ class ReviewDialog(QDialog):
             return
         receipt = self.rows[index]
         self.reprocess_button.setVisible(
-            self.confirmed_receipt_id is not None
-            and receipt.merchant == "Unidentified receipt"
+            receipt.merchant == "Unidentified receipt"
         )
         self._loading = True
         self.merchant.setText(receipt.merchant)
@@ -558,7 +557,12 @@ class ReviewDialog(QDialog):
         self.accept()
 
     def _reprocess_source(self) -> None:
-        if self.confirmed_receipt_id is None:
+        receipt_id = (
+            self.confirmed_receipt_id
+            if self.confirmed_receipt_id is not None
+            else (self.rows[self.list.currentRow()].id if self.rows else None)
+        )
+        if receipt_id is None:
             return
         answer = QMessageBox.question(
             self,
@@ -573,7 +577,7 @@ class ReviewDialog(QDialog):
         if answer != QMessageBox.StandardButton.Yes:
             return
         try:
-            self.controller.reprocess_placeholder_receipt(self.confirmed_receipt_id)
+            self.controller.reprocess_placeholder_receipt(receipt_id)
         except (LookupError, OSError, ValueError) as error:
             QMessageBox.critical(self, "Receipt could not be reprocessed", str(error))
             return
