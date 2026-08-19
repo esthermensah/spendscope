@@ -372,6 +372,25 @@ class DesktopController:
                 raise LookupError("Confirmed expense no longer exists")
             CorrectionService(session).delete_receipt(receipt)
 
+    def reprocess_placeholder_receipt(self, receipt_id: int) -> None:
+        """Send an old unidentified receipt through the current Inbox pipeline."""
+        with session_scope(self.engine) as session:
+            receipt = session.get(ReceiptRecord, receipt_id)
+            if receipt is None or receipt.merchant_original != "Unidentified receipt":
+                raise ValueError("Only an unidentified receipt can be reprocessed")
+            source_value = receipt.source_file_archive_path or receipt.source_file_original_path
+            if not source_value:
+                raise LookupError("The original receipt file could not be found")
+            source = Path(source_value)
+            if not source.exists():
+                raise LookupError("The original receipt file could not be found")
+            processed = ProcessedFileRepository(session).get_by_hash(receipt.source_file_hash or "")
+            session.delete(receipt)
+            if processed is not None:
+                session.delete(processed)
+            session.flush()
+            ReceiptFileManager(self.config).import_to_inbox([source])
+
     def import_receipts(self, sources: list[Path]) -> tuple[list[Path], list[str]]:
         return ReceiptFileManager(self.config).import_to_inbox(sources)
 

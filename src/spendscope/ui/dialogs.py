@@ -207,10 +207,13 @@ class ReviewDialog(QDialog):
         self.reject_button.setVisible(confirmed_receipt_id is None)
         self.delete_button = QPushButton("Delete expense")
         self.delete_button.setVisible(confirmed_receipt_id is not None)
+        self.reprocess_button = QPushButton("Reprocess source")
+        self.reprocess_button.setVisible(False)
         self.open_source = QPushButton("Open source")
         self.confirm.clicked.connect(lambda: self._resolve(True))
         self.reject_button.clicked.connect(lambda: self._resolve(False))
         self.delete_button.clicked.connect(self._delete_expense)
+        self.reprocess_button.clicked.connect(self._reprocess_source)
         self.open_source.clicked.connect(self._open_source)
         metadata = QVBoxLayout()
         metadata.addWidget(self.reason)
@@ -233,6 +236,7 @@ class ReviewDialog(QDialog):
         actions.addWidget(self.open_source)
         actions.addStretch()
         actions.addWidget(self.delete_button)
+        actions.addWidget(self.reprocess_button)
         actions.addWidget(self.reject_button)
         actions.addWidget(self.confirm)
         title = QLabel("Edit expense" if confirmed_receipt_id is not None else "Review receipts")
@@ -305,6 +309,7 @@ class ReviewDialog(QDialog):
 
     def _clear_editor(self) -> None:
         self._loading = True
+        self.reprocess_button.setVisible(False)
         self.list.setCurrentRow(-1)
         self.preview.clear()
         self.preview.setText("All caught up — no receipts need review.")
@@ -324,6 +329,10 @@ class ReviewDialog(QDialog):
         if not 0 <= index < len(self.rows):
             return
         receipt = self.rows[index]
+        self.reprocess_button.setVisible(
+            self.confirmed_receipt_id is not None
+            and receipt.merchant == "Unidentified receipt"
+        )
         self._loading = True
         self.merchant.setText(receipt.merchant)
         self.when.setDate(
@@ -544,6 +553,29 @@ class ReviewDialog(QDialog):
             self.controller.delete_receipt(self.confirmed_receipt_id)
         except (LookupError, OSError, ValueError) as error:
             QMessageBox.critical(self, "Expense could not be deleted", str(error))
+            return
+        self.receipt_resolved.emit()
+        self.accept()
+
+    def _reprocess_source(self) -> None:
+        if self.confirmed_receipt_id is None:
+            return
+        answer = QMessageBox.question(
+            self,
+            "Reprocess this source?",
+            (
+                "SpendScope will send the original file through Inbox again using the current "
+                "OCR and table parser."
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self.controller.reprocess_placeholder_receipt(self.confirmed_receipt_id)
+        except (LookupError, OSError, ValueError) as error:
+            QMessageBox.critical(self, "Receipt could not be reprocessed", str(error))
             return
         self.receipt_resolved.emit()
         self.accept()
