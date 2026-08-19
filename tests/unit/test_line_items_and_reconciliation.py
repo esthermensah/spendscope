@@ -1,6 +1,10 @@
 from decimal import Decimal
 
-from spendscope.parsing.line_item_parser import parse_amazon_tabular_items, parse_line_items
+from spendscope.parsing.line_item_parser import (
+    parse_amazon_tabular_items,
+    parse_amazon_tabular_summary,
+    parse_line_items,
+)
 from spendscope.parsing.validators import reconcile_receipt
 
 
@@ -49,6 +53,35 @@ def test_amazon_tabular_parser_extracts_rows_and_total_column() -> None:
     )
     assert [item.line_total for item in items] == [Decimal("9.57"), Decimal("26.59")]
     assert items[0].description.endswith("White")
+
+
+def test_amazon_columnar_parser_keeps_wrapped_product_names_aligned() -> None:
+    summary = parse_amazon_tabular_summary(
+        [
+            "USD",
+            "Product Name",
+            "PAPAISON Roller Skates for Women and Girls, Deluxe 2 Layer-",
+            "Classic Roller Skates for Men, Professional Outdoor",
+            "38.43",
+            "Shipment Item Subtotal Tax Status",
+            "2.00 Shipped",
+            "Total Amount",
+            "64.95",
+            "41.51",
+            "Total Discounts Unit Price",
+            "60.99",
+            "38.98",
+            "Unit Price Tax Website",
+            "3.96 Amazon.com",
+            "2.53 Amazon.com",
+        ]
+    )
+    assert summary.items[0].description == (
+        "PAPAISON Roller Skates for Women and Girls, Deluxe 2 Layer- "
+        "Classic Roller Skates for Men, Professional Outdoor"
+    )
+    assert len(summary.items) == 2
+    assert summary.total == Decimal("106.46")
 
 
 def test_reconciliation_balanced_rounding_review_and_missing() -> None:

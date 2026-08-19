@@ -457,6 +457,7 @@ class ReviewDialog(QDialog):
         self.subtotal.blockSignals(True)
         self.subtotal.setValue(subtotal)
         self.subtotal.blockSignals(False)
+        self._update_total()
 
     def _update_reconciliation(self, *_args: object) -> None:
         if self._loading:
@@ -476,10 +477,9 @@ class ReviewDialog(QDialog):
             )
         if differences:
             self.reconciliation.setText("Needs correction: " + "; ".join(differences))
-            self.confirm.setEnabled(False)
         else:
             self.reconciliation.setText("Balanced — this receipt is ready to confirm.")
-            self.confirm.setEnabled(bool(self.rows))
+        self.confirm.setEnabled(bool(self.rows))
 
     def _update_total(self, *_args: object) -> None:
         if self._loading:
@@ -589,6 +589,19 @@ class ReviewDialog(QDialog):
         if not 0 <= index < len(self.rows):
             return
         if confirm:
+            if self.reconciliation.text().startswith("Needs correction:"):
+                answer = QMessageBox.question(
+                    self,
+                    "Amounts do not match",
+                    (
+                        "The extracted line items do not currently add up to the receipt total. "
+                        "Save these corrections anyway? You can edit the expense again later."
+                    ),
+                    QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Cancel,
+                    QMessageBox.StandardButton.Cancel,
+                )
+                if answer != QMessageBox.StandardButton.Save:
+                    return
             try:
                 if self.confirmed_receipt_id is not None:
                     self.controller.update_confirmed_receipt(self._draft())

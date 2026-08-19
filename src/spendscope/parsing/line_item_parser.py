@@ -216,13 +216,32 @@ def _parse_amazon_columnar_summary(lines: list[str]) -> AmazonTabularSummary:
     # readable text, using a neutral label only when OCR did not recover it.
     names: list[str] = []
     if product_header is not None and shipment_header is not None:
-        for line in lines[product_header + 1 : shipment_header]:
-            cleaned = line.strip(" .:-")
+        product_end = next(
+            (
+                index
+                for index in range(product_header + 1, shipment_header)
+                if re.fullmatch(r"[-']?\d+(?:[.,]\d{1,2})?", lines[index])
+            ),
+            shipment_header,
+        )
+        continuation_starts = ("lipids", "rising", "sit")
+        for line in lines[product_header + 1 : product_end]:
+            cleaned = line.strip(" .:")
             if not cleaned or cleaned.casefold() in {"g", "bpr rb"}:
                 continue
-            if re.search(r"\b(?:visa|discover)\s*-\s*\d{4}\b", cleaned, re.I):
+            cleaned = re.sub(
+                r"^(?:\d+\s+)?(?:visa|discover)\s*-\s*\d{4}\s+",
+                "",
+                cleaned,
+                flags=re.I,
+            )
+            if not cleaned:
                 continue
-            if names and (names[-1].endswith((",", "-")) or cleaned[0].islower()):
+            if names and (
+                names[-1].endswith((",", "-"))
+                or cleaned[0].islower()
+                or cleaned.casefold().startswith(continuation_starts)
+            ):
                 names[-1] = f"{names[-1]} {cleaned}"
             else:
                 names.append(cleaned)
