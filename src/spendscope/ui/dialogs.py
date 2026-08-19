@@ -146,12 +146,13 @@ class ReviewDialog(QDialog):
         self.list.currentRowChanged.connect(self._selection_changed)
         self.preview = QLabel("Select a receipt to preview its source file.")
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.preview.setMinimumSize(360, 220)
+        self.preview.setMinimumSize(420, 260)
         self.preview.setMaximumHeight(280)
         self.preview.setWordWrap(True)
         self.reason = QLabel()
         self.reason.setObjectName("secondaryText")
         self.reason.setWordWrap(True)
+        self.reason.setMinimumHeight(64)
         self.merchant = QLineEdit()
         self.when = QDateEdit()
         self.when.setCalendarPopup(True)
@@ -261,7 +262,7 @@ class ReviewDialog(QDialog):
         if screen is None:
             return
         available = screen.availableGeometry()
-        width = min(1280, max(1080, int(available.width() * 0.90)))
+        width = min(1400, max(1180, int(available.width() * 0.94)))
         height = min(900, max(760, int(available.height() * 0.88)))
         self.resize(width, height)
 

@@ -17,7 +17,12 @@ _AMOUNT_AT_END = re.compile(
 
 
 def parse_amount(value: str) -> Decimal | None:
-    cleaned = value.strip().replace("\N{MINUS SIGN}", "-").replace("\u00a0", " ")
+    cleaned = (
+        value.strip()
+        .replace("\N{MINUS SIGN}", "-")
+        .replace("\u00a0", " ")
+        .replace("'", "")
+    )
     negative_parentheses = cleaned.startswith("(") and cleaned.endswith(")")
     cleaned = re.sub(r"(?i)USD|EUR|GBP|GHS|CAD|AUD|GH₵|US\$|CA\$|[€£$()]", "", cleaned)
     cleaned = cleaned.replace(" ", "")

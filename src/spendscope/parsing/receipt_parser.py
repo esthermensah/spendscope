@@ -8,7 +8,7 @@ from decimal import Decimal
 from spendscope.parsing.amount_parser import parse_labeled_amount
 from spendscope.parsing.currency_parser import parse_currency
 from spendscope.parsing.date_parser import parse_date
-from spendscope.parsing.line_item_parser import parse_amazon_tabular_items, parse_line_items
+from spendscope.parsing.line_item_parser import parse_amazon_tabular_summary, parse_line_items
 from spendscope.parsing.merchant_parser import parse_merchant, parse_receipt_number
 from spendscope.parsing.models import ParsedReceipt, ParsedValue
 from spendscope.parsing.validators import reconcile_receipt
@@ -34,7 +34,8 @@ class ReceiptParser:
         imported_at: datetime | None = None,
     ) -> ParsedReceipt:
         lines = [line.strip() for line in text.splitlines() if line.strip()]
-        amazon_items = parse_amazon_tabular_items(lines)
+        amazon_summary = parse_amazon_tabular_summary(lines)
+        amazon_items = amazon_summary.items
         merchant = (
             ParsedValue("Amazon", 0.92, ("Amazon",))
             if amazon_items
@@ -69,15 +70,33 @@ class ReceiptParser:
             lines,
             (r"(?<!sub)\btotal\b", r"\bamount\s+due\b", r"\bgrand\s+total\b"),
         )
-        if amazon_items and final_total.value is None:
-            inferred_total = sum((item.line_total for item in amazon_items), Decimal("0"))
+        if amazon_items:
+            inferred_total = amazon_summary.total
             final_total = ParsedValue(
                 inferred_total,
-                0.72,
+                0.85,
                 (inferred_total,),
-                ("total inferred by summing Amazon line-item totals",),
+                ("total aggregated from Amazon total-amount columns",),
             )
-        if amazon_items and subtotal.value is None:
+            subtotal = ParsedValue(
+                amazon_summary.subtotal,
+                0.85,
+                (amazon_summary.subtotal,),
+                ("subtotal aggregated from Amazon unit-price columns",),
+            )
+            tax = ParsedValue(
+                amazon_summary.tax,
+                0.85,
+                (amazon_summary.tax,),
+                ("tax aggregated from Amazon unit-tax columns",),
+            )
+            discount = ParsedValue(
+                amazon_summary.discount,
+                0.85,
+                (amazon_summary.discount,),
+                ("discount aggregated from Amazon discount columns",),
+            )
+        elif amazon_items and subtotal.value is None:
             inferred_subtotal = sum((item.line_total for item in amazon_items), Decimal("0"))
             subtotal = ParsedValue(
                 inferred_subtotal,

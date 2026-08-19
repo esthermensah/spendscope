@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from decimal import Decimal
 
 from spendscope.parsing.amount_parser import amount_at_end, parse_amount
@@ -36,6 +37,15 @@ _AMAZON_PAYMENT = re.compile(
     re.IGNORECASE,
 )
 _AMAZON_NUMBER = re.compile(r"(?<![A-Za-z])[-']?\d+(?:[.,]\d{1,2})?(?![A-Za-z])")
+
+
+@dataclass(frozen=True, slots=True)
+class AmazonTabularSummary:
+    items: tuple[ParsedLineItem, ...]
+    subtotal: Decimal
+    tax: Decimal
+    discount: Decimal
+    total: Decimal
 
 
 def parse_line_items(lines: list[str]) -> tuple[ParsedLineItem, ...]:
@@ -84,9 +94,17 @@ def parse_amazon_tabular_items(lines: list[str]) -> tuple[ParsedLineItem, ...]:
     the next. The last six numeric columns are shipment subtotal, tax, total,
     discount, unit price, and unit tax; the total column is therefore unambiguous.
     """
+    return parse_amazon_tabular_summary(lines).items
+
+
+def parse_amazon_tabular_summary(lines: list[str]) -> AmazonTabularSummary:
     if not any("amazon.com" in line.casefold() for line in lines):
-        return ()
+        return AmazonTabularSummary((), Decimal("0"), Decimal("0"), Decimal("0"), Decimal("0"))
     items: list[ParsedLineItem] = []
+    subtotal = Decimal("0")
+    tax = Decimal("0")
+    discount = Decimal("0")
+    total_sum = Decimal("0")
     continuation: list[str] = []
     for line in lines:
         stripped = line.strip()
@@ -120,6 +138,9 @@ def parse_amazon_tabular_items(lines: list[str]) -> tuple[ParsedLineItem, ...]:
         total = amount_at_end(amount_matches[2].group())
         if total is None:
             continue
+        unit_price = parse_amount(amount_matches[4].group()) or Decimal("0")
+        unit_tax = parse_amount(amount_matches[5].group()) or Decimal("0")
+        row_discount = parse_amount(amount_matches[3].group()) or Decimal("0")
         description = " ".join((*continuation, columns[: amount_matches[0].start()].strip()))
         continuation = []
         description = re.sub(r"\s+", " ", description).strip(" .:-")
@@ -129,10 +150,14 @@ def parse_amazon_tabular_items(lines: list[str]) -> tuple[ParsedLineItem, ...]:
             ParsedLineItem(
                 description=description,
                 quantity=Decimal("1"),
-                unit_price=parse_amount(amount_matches[4].group()),
+                unit_price=unit_price,
                 line_total=total,
                 confidence=0.82,
                 source_line=stripped,
             )
         )
-    return tuple(items)
+        subtotal += unit_price
+        tax += unit_tax
+        discount += abs(row_discount)
+        total_sum += total
+    return AmazonTabularSummary(tuple(items), subtotal, tax, discount, total_sum)
