@@ -383,13 +383,14 @@ class DesktopController:
                 and receipt.merchant_original != "Unidentified receipt"
             ):
                 raise ValueError("Only pending or unidentified receipts can be reprocessed")
-            source_value = receipt.source_file_archive_path or receipt.source_file_original_path
-            if not source_value:
-                raise LookupError("The original receipt file could not be found")
-            source = Path(source_value)
-            if not source.exists():
-                raise LookupError("The original receipt file could not be found")
             processed = ProcessedFileRepository(session).get_by_hash(receipt.source_file_hash or "")
+            source_value = receipt.source_file_archive_path or receipt.source_file_original_path
+            source = Path(source_value) if source_value else None
+            if (source is None or not source.exists()) and processed is not None:
+                fallback = processed.archive_path or processed.original_path
+                source = Path(fallback) if fallback else None
+            if source is None or not source.exists():
+                raise LookupError("The original receipt file could not be found")
             session.delete(receipt)
             if processed is not None:
                 session.delete(processed)
