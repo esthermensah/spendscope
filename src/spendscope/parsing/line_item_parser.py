@@ -209,6 +209,7 @@ def _parse_amazon_columnar_summary(lines: list[str]) -> AmazonTabularSummary:
     # The discount column may contain a few OCR-readable values before the
     # unit-price column. Align from the right using the item count.
     unit_prices = unit_price_candidates[-len(totals) :]
+    discount_values = unit_price_candidates[: -len(totals)]
     unit_taxes = _column_amounts(
         lines, (unit_tax_header or len(lines)) + 1, len(lines), amazon_suffix=True
     )
@@ -251,7 +252,9 @@ def _parse_amazon_columnar_summary(lines: list[str]) -> AmazonTabularSummary:
             description=names[index] if index < len(names) else f"Amazon item {index + 1}",
             quantity=Decimal("1"),
             unit_price=unit_prices[index] if index < len(unit_prices) else totals[index],
-            line_total=totals[index],
+            # Unit price is the pre-tax line amount and therefore must add up
+            # to the receipt subtotal. Total Amount includes tax/discounts.
+            line_total=unit_prices[index] if index < len(unit_prices) else totals[index],
             confidence=0.62,
             source_line="Amazon columnar screenshot",
         )
@@ -259,4 +262,5 @@ def _parse_amazon_columnar_summary(lines: list[str]) -> AmazonTabularSummary:
     )
     subtotal = sum(unit_prices[:count], Decimal("0")) if unit_prices else sum(totals, Decimal("0"))
     tax = sum(unit_taxes[:count], Decimal("0"))
-    return AmazonTabularSummary(items, subtotal, tax, Decimal("0"), sum(totals, Decimal("0")))
+    discount = sum((abs(value) for value in discount_values if value), Decimal("0"))
+    return AmazonTabularSummary(items, subtotal, tax, discount, sum(totals, Decimal("0")))
