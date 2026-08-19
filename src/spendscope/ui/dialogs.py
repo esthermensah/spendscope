@@ -7,7 +7,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from PySide6.QtCore import QDate, Qt, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QPixmap
+from PySide6.QtGui import QDesktopServices, QPixmap, QShowEvent
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -137,7 +137,7 @@ class ReviewDialog(QDialog):
             "Edit expense" if confirmed_receipt_id is not None else "Review receipts"
         )
         self.resize(1180, 820)
-        self.setMinimumSize(900, 680)
+        self.setMinimumSize(760, 560)
         self.setSizeGripEnabled(True)
         self._loading = False
         self.list = QListWidget()
@@ -146,13 +146,13 @@ class ReviewDialog(QDialog):
         self.list.currentRowChanged.connect(self._selection_changed)
         self.preview = QLabel("Select a receipt to preview its source file.")
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.preview.setMinimumSize(420, 260)
-        self.preview.setMaximumHeight(280)
+        self.preview.setMinimumSize(360, 200)
+        self.preview.setMaximumHeight(220)
         self.preview.setWordWrap(True)
         self.reason = QLabel()
         self.reason.setObjectName("secondaryText")
         self.reason.setWordWrap(True)
-        self.reason.setMinimumHeight(64)
+        self.reason.setMinimumHeight(48)
         self.merchant = QLineEdit()
         self.when = QDateEdit()
         self.when.setCalendarPopup(True)
@@ -262,9 +262,15 @@ class ReviewDialog(QDialog):
         if screen is None:
             return
         available = screen.availableGeometry()
-        width = min(1400, max(1180, int(available.width() * 0.94)))
-        height = min(900, max(760, int(available.height() * 0.88)))
+        width = min(1400, max(1080, available.width() - 48))
+        height = min(900, max(700, available.height() - 48))
         self.resize(width, height)
+
+    def showEvent(self, event: QShowEvent) -> None:
+        # The dialog's screen is reliable only after it is shown. Size against
+        # the usable screen area so the action row cannot fall behind the dock.
+        super().showEvent(event)
+        self._size_to_available_screen()
 
     @staticmethod
     def _money_input() -> QDoubleSpinBox:
