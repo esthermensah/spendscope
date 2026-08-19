@@ -18,8 +18,8 @@ def test_default_categories_are_seeded_idempotently(database_engine: Engine) -> 
         first = repository.seed_defaults()
         second = repository.seed_defaults()
 
-        assert len(first) == 18
-        assert len(second) == 18
+        assert len(first) == 19
+        assert len(second) == 19
         assert repository.get_by_internal_name("tax").system_category is True  # type: ignore[union-attr]
         assert [category.display_name for category in repository.list_active()] == sorted(
             category.display_name for category in first

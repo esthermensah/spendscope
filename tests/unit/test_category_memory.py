@@ -37,7 +37,7 @@ def test_categories_can_be_managed_and_defaults_restored(database_engine: Engine
 
         assert custom.display_name == "Pet Care" and not custom.active
         assert groceries.display_name == "Groceries" and groceries.active
-        assert len(restored) == 18
+        assert len(restored) == 19
 
 
 def test_tax_tips_and_unallocated_are_protected_system_categories(

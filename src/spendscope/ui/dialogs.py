@@ -136,8 +136,8 @@ class ReviewDialog(QDialog):
         self.setWindowTitle(
             "Edit expense" if confirmed_receipt_id is not None else "Review receipts"
         )
-        self.resize(1080, 720)
-        self.setMinimumSize(760, 520)
+        self.resize(1180, 820)
+        self.setMinimumSize(900, 680)
         self.setSizeGripEnabled(True)
         self._loading = False
         self.list = QListWidget()
@@ -195,6 +195,7 @@ class ReviewDialog(QDialog):
         item_actions.addWidget(remove_item)
         item_actions.addStretch()
         self.remember = QCheckBox("Remember corrected item names and categories")
+        self.remember.setChecked(True)
         self.reconciliation = QLabel()
         self.reconciliation.setWordWrap(True)
         self.confirm = QPushButton(
@@ -251,8 +252,18 @@ class ReviewDialog(QDialog):
         layout.addLayout(header)
         layout.addLayout(content)
         layout.addLayout(actions)
+        self._size_to_available_screen()
         self.rows = self.controller.pending_receipts()
         self._reload()
+
+    def _size_to_available_screen(self) -> None:
+        screen = self.screen() or QApplication.primaryScreen()
+        if screen is None:
+            return
+        available = screen.availableGeometry()
+        width = min(1280, max(1080, int(available.width() * 0.90)))
+        height = min(900, max(760, int(available.height() * 0.88)))
+        self.resize(width, height)
 
     @staticmethod
     def _money_input() -> QDoubleSpinBox:

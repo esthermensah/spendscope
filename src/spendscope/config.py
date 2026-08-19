@@ -30,6 +30,7 @@ DEFAULT_CATEGORIES: tuple[tuple[str, str], ...] = (
     ("tax", "Tax"),
     ("tips", "Tips"),
     ("unallocated", "Unallocated"),
+    ("one_time_purchases", "One-time purchases"),
     ("other", "Other"),
 )
 
