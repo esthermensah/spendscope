@@ -58,10 +58,20 @@ class RuleBasedCategorizer:
             for keyword in keywords:
                 if f" {keyword} " in f" {normalized} ":
                     matches.append((category, keyword))
-        categories = {category for category, _ in matches}
+        if matches:
+            longest_length = max(len(keyword.split()) for _, keyword in matches)
+            strongest = [
+                (category, keyword)
+                for category, keyword in matches
+                if len(keyword.split()) == longest_length
+            ]
+            categories = {category for category, _ in strongest}
+        else:
+            strongest = []
+            categories = set()
         if len(categories) == 1:
             category = next(iter(categories))
-            longest_keyword = max(keyword for _, keyword in matches)
+            longest_keyword = max(keyword for _, keyword in strongest)
             specificity = min(len(longest_keyword.split()) * 0.05, 0.1)
             return CategorizationResult(
                 category,

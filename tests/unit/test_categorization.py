@@ -84,3 +84,17 @@ def test_ambiguous_and_unknown_items_remain_unallocated() -> None:
     assert ambiguous.source == "ambiguous_keywords"
     assert unknown.category_internal_name == "unallocated"
     assert unknown.confidence == 0.25
+
+
+def test_specific_phrases_beat_shorter_matches_and_durable_goods_are_one_time() -> None:
+    categorizer = RuleBasedCategorizer()
+
+    assert categorizer.categorize_item(item("Bottled water"), context()).category_internal_name == (
+        "groceries"
+    )
+    assert categorizer.categorize_item(item("Water bill"), context()).category_internal_name == (
+        "utilities"
+    )
+    assert categorizer.categorize_item(item("Desk monitor"), context()).category_internal_name == (
+        "one_time_purchases"
+    )

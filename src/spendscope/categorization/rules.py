@@ -15,6 +15,7 @@ DEFAULT_ITEM_KEYWORDS: dict[str, frozenset[str]] = {
             "milk",
             "rice",
             "vegetable",
+            "water",
         }
     ),
     "eating_out": frozenset(
@@ -42,6 +43,28 @@ DEFAULT_ITEM_KEYWORDS: dict[str, frozenset[str]] = {
     "shopping": frozenset({"clothing", "dress", "jacket", "shoe", "shirt"}),
     "entertainment": frozenset({"cinema", "game", "movie", "museum", "theater"}),
     "travel": frozenset({"airfare", "flight", "hotel", "luggage"}),
-    "subscriptions": frozenset({"membership", "monthly plan", "subscription"}),
+    "subscriptions": frozenset(
+        {"annual renewal", "membership", "monthly", "monthly plan", "recurring", "subscription"}
+    ),
     "gifts_donations": frozenset({"charity", "donation", "gift"}),
+    "one_time_purchases": frozenset(
+        {
+            "appliance",
+            "camera",
+            "computer",
+            "couch",
+            "desk",
+            "furniture",
+            "laptop",
+            "mattress",
+            "mirror",
+            "monitor",
+            "printer",
+            "refrigerator",
+            "sofa",
+            "table",
+            "television",
+            "tv",
+        }
+    ),
 }
