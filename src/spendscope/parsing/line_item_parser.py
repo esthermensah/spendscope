@@ -160,4 +160,84 @@ def parse_amazon_tabular_summary(lines: list[str]) -> AmazonTabularSummary:
         tax += unit_tax
         discount += abs(row_discount)
         total_sum += total
-    return AmazonTabularSummary(tuple(items), subtotal, tax, discount, total_sum)
+    if items:
+        return AmazonTabularSummary(tuple(items), subtotal, tax, discount, total_sum)
+
+    # Tesseract may read a spreadsheet screenshot one visual column at a time.
+    # In that layout the row parser above cannot see payment and amount columns
+    # on the same line, but the column headers and values are still recoverable.
+    return _parse_amazon_columnar_summary(lines)
+
+
+def _column_amounts(
+    lines: list[str], start: int, end: int, *, amazon_suffix: bool = False
+) -> list[Decimal]:
+    values: list[Decimal] = []
+    for line in lines[start:end]:
+        if amazon_suffix and "amazon.com" not in line.casefold():
+            continue
+        match = re.search(r"(?<![A-Za-z])[-']?\d+(?:[.,]\d{1,2})?(?![A-Za-z])", line)
+        if match:
+            value = parse_amount(match.group())
+            if value is not None:
+                values.append(value)
+    return values
+
+
+def _parse_amazon_columnar_summary(lines: list[str]) -> AmazonTabularSummary:
+    def index_containing(term: str, after: int = 0) -> int | None:
+        term_folded = term.casefold()
+        for index in range(after, len(lines)):
+            if term_folded in lines[index].casefold():
+                return index
+        return None
+
+    product_header = index_containing("product name")
+    shipment_header = index_containing("shipment item", product_header or 0)
+    total_header = index_containing("total amount")
+    discounts_header = index_containing("total discounts", total_header or 0)
+    unit_tax_header = index_containing("unit price tax", discounts_header or 0)
+    if total_header is None or discounts_header is None:
+        return AmazonTabularSummary((), Decimal("0"), Decimal("0"), Decimal("0"), Decimal("0"))
+
+    totals = _column_amounts(lines, total_header + 1, discounts_header)
+    if not totals:
+        return AmazonTabularSummary((), Decimal("0"), Decimal("0"), Decimal("0"), Decimal("0"))
+    unit_price_candidates = _column_amounts(
+        lines, discounts_header + 1, unit_tax_header or len(lines)
+    )
+    # The discount column may contain a few OCR-readable values before the
+    # unit-price column. Align from the right using the item count.
+    unit_prices = unit_price_candidates[-len(totals) :]
+    unit_taxes = _column_amounts(
+        lines, (unit_tax_header or len(lines)) + 1, len(lines), amazon_suffix=True
+    )
+    # Product names are commonly wrapped across two OCR lines. Preserve the
+    # readable text, using a neutral label only when OCR did not recover it.
+    names: list[str] = []
+    if product_header is not None and shipment_header is not None:
+        for line in lines[product_header + 1 : shipment_header]:
+            cleaned = line.strip(" .:-")
+            if not cleaned or cleaned.casefold() in {"g", "bpr rb"}:
+                continue
+            if re.search(r"\b(?:visa|discover)\s*-\s*\d{4}\b", cleaned, re.I):
+                continue
+            if names and (names[-1].endswith((",", "-")) or cleaned[0].islower()):
+                names[-1] = f"{names[-1]} {cleaned}"
+            else:
+                names.append(cleaned)
+    count = len(totals)
+    items = tuple(
+        ParsedLineItem(
+            description=names[index] if index < len(names) else f"Amazon item {index + 1}",
+            quantity=Decimal("1"),
+            unit_price=unit_prices[index] if index < len(unit_prices) else totals[index],
+            line_total=totals[index],
+            confidence=0.62,
+            source_line="Amazon columnar screenshot",
+        )
+        for index in range(count)
+    )
+    subtotal = sum(unit_prices[:count], Decimal("0")) if unit_prices else sum(totals, Decimal("0"))
+    tax = sum(unit_taxes[:count], Decimal("0"))
+    return AmazonTabularSummary(items, subtotal, tax, Decimal("0"), sum(totals, Decimal("0")))
