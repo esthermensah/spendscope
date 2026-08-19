@@ -51,3 +51,11 @@ def test_incomplete_receipt_returns_visible_errors_and_warnings() -> None:
     assert "final total is required" in parsed.errors
     assert parsed.reconciliation.status == "unresolved"
     assert parsed.warnings
+
+
+def test_missing_total_is_inferred_from_extracted_amounts() -> None:
+    parsed = ReceiptParser(default_currency="USD").parse(
+        "Store\n2026-08-19\nMilk 4.00\nBread 3.00\nSubtotal 7.00\nTax 0.70"
+    )
+    assert parsed.final_total.value == Decimal("7.70")
+    assert "final total inferred" in parsed.final_total.warnings[0]

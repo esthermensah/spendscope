@@ -71,11 +71,11 @@ class ReceiptParser:
             (r"(?<!sub)\btotal\b", r"\bamount\s+due\b", r"\bgrand\s+total\b"),
         )
         if amazon_items:
-            inferred_total = amazon_summary.total
+            amazon_inferred_total = amazon_summary.total
             final_total = ParsedValue(
-                inferred_total,
+                amazon_inferred_total,
                 0.85,
-                (inferred_total,),
+                (amazon_inferred_total,),
                 ("total aggregated from Amazon total-amount columns",),
             )
             subtotal = ParsedValue(
@@ -104,6 +104,26 @@ class ReceiptParser:
                 (inferred_subtotal,),
                 ("subtotal inferred by summing Amazon line-item totals",),
             )
+        # Some exports and screenshots omit the printed total label. Keep the
+        # receipt usable by sending it to review with a transparent estimate
+        # rather than rejecting the file outright.
+        if final_total.value is None:
+            inferred_total: Decimal | None = None
+            inference_warning = "final total inferred from extracted receipt amounts"
+            if subtotal.value is not None:
+                inferred_total = subtotal.value + (tax.value or Decimal("0"))
+                inferred_total += tip.value or Decimal("0")
+                inferred_total -= discount.value or Decimal("0")
+            elif items:
+                inferred_total = sum((item.line_total for item in items), Decimal("0"))
+                inference_warning = "final total inferred by summing extracted line items"
+            if inferred_total is not None and inferred_total > 0:
+                final_total = ParsedValue(
+                    inferred_total,
+                    0.45,
+                    (inferred_total,),
+                    (inference_warning,),
+                )
         amount_paid = parse_labeled_amount(
             lines, (r"\bamount\s+paid\b", r"\bcash\s+tendered\b", r"\btendered\b")
         )
