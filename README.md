@@ -45,8 +45,10 @@ Apple documents this exception process in
 not signed or notarized, macOS cannot confirm that Apple checked it for malicious software. Verify
 that the ZIP came from this repository before choosing **Open Anyway**.
 
-On Windows, unzip `SpendScope-Windows-X64.zip` and open `SpendScope.exe` inside the SpendScope
-folder. Windows may display a SmartScreen warning because the beta is not code-signed.
+Windows packaging is included for contributors, but it has not been personally tested by the
+project owner. If you try it, unzip `SpendScope-Windows-X64.zip` and open `SpendScope.exe` inside
+the SpendScope folder. Windows may display a SmartScreen warning because the beta is not
+code-signed; please report what you find in GitHub Issues.
 
 These beta builds are intentionally unsigned and the Mac build is not Apple-notarized. Receipt OCR also requires Tesseract to be
 installed separately; manual expenses, budgets, local storage, and Google reporting remain
