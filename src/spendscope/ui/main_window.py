@@ -209,7 +209,7 @@ class SpendingChartCard(QFrame):
         self.setObjectName("chartCard")
         title = QLabel("Spending by category")
         title.setObjectName("sectionHeading")
-        subtitle = QLabel("A quick view of what is shaping this month.")
+        subtitle = QLabel("Confirmed spending, with receipt-level adjustments allocated.")
         subtitle.setObjectName("sectionSubtitle")
         self.chart = SpendingDonut()
         self.legend = QVBoxLayout()
@@ -424,8 +424,8 @@ class MainWindow(QMainWindow):
         self.cards["storage"].clicked.connect(self.open_storage)
         self.cards["inbox"].setProperty("interactive", True)
         self.cards["inbox"].setCursor(Qt.CursorShape.PointingHandCursor)
-        self.cards["inbox"].setToolTip("Process receipts waiting in the Inbox.")
-        self.cards["inbox"].clicked.connect(self.process_receipts)
+        self.cards["inbox"].setToolTip("View and process receipts in the pipeline.")
+        self.cards["inbox"].clicked.connect(self.open_receipt_pipeline)
         cards = QGridLayout()
         cards.setHorizontalSpacing(12)
         cards.setVerticalSpacing(12)
@@ -443,7 +443,7 @@ class MainWindow(QMainWindow):
         self.import_button.clicked.connect(self.choose_receipts)
         self.process_button = QPushButton("Process waiting receipts")
         self.process_button.setAccessibleName("Process receipts waiting in the Inbox")
-        self.process_button.clicked.connect(self.process_receipts)
+        self.process_button.clicked.connect(self.open_receipt_pipeline)
         self.process_button.hide()
         import_layout = QVBoxLayout()
         import_layout.setContentsMargins(24, 24, 24, 24)
@@ -582,14 +582,35 @@ class MainWindow(QMainWindow):
         self.cards["inbox"].value.setText(str(snapshot.inbox_count))
         if snapshot.inbox_count:
             receipt_word = "receipt" if snapshot.inbox_count == 1 else "receipts"
-            self.cards["inbox"].detail.setText("Click to process now")
+            detail = f"{snapshot.inbox_count} waiting to process"
             self.process_button.setText(
                 f"Process {snapshot.inbox_count} waiting {receipt_word}"
             )
             self.process_button.show()
-        else:
-            self.cards["inbox"].detail.setText("Waiting to be processed")
+        elif snapshot.processing_count:
+            processing_word = "receipt" if snapshot.processing_count == 1 else "receipts"
+            detail = f"{snapshot.processing_count} {processing_word} processing"
             self.process_button.hide()
+        else:
+            detail = "Inbox is clear"
+            if snapshot.failed_count:
+                detail = f"{snapshot.failed_count} failed — review to retry"
+            if snapshot.review_count:
+                review_word = "receipt" if snapshot.review_count == 1 else "receipts"
+                detail = f"{snapshot.review_count} {review_word} need a look"
+            if snapshot.review_count or snapshot.failed_count:
+                self.process_button.setText("Review receipt status")
+                self.process_button.show()
+            else:
+                self.process_button.hide()
+        self.cards["inbox"].detail.setText(detail)
+        self.cards["inbox"].setToolTip(
+            "Receipt pipeline: "
+            f"{snapshot.inbox_count} waiting, "
+            f"{snapshot.processing_count} processing, "
+            f"{snapshot.review_count} needing review, "
+            f"{snapshot.failed_count} failed."
+        )
         self.cards["review"].value.setText(str(snapshot.review_count))
         self.cards["sync"].value.setText(str(snapshot.pending_sync))
         review_label = (
@@ -634,6 +655,14 @@ class MainWindow(QMainWindow):
             edit.setAccessibleName(f"Edit {merchant} expense")
             edit.clicked.connect(lambda _checked=False, selected=row: self._edit_recent(selected))
             self.recent.setCellWidget(row, 3, edit)
+
+    def open_receipt_pipeline(self) -> None:
+        """Open the next useful receipt action based on its current status."""
+        snapshot = self.controller.dashboard()
+        if snapshot.inbox_count:
+            self.process_receipts()
+        elif snapshot.review_count or snapshot.failed_count:
+            self.open_review()
 
     def _edit_recent(self, row: int) -> None:
         item = self.recent.item(row, 0)

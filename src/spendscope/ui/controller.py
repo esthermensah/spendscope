@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -42,6 +43,8 @@ from spendscope.storage.usage import StorageReport, calculate_storage_usage
 @dataclass(frozen=True, slots=True)
 class DashboardSnapshot:
     inbox_count: int
+    processing_count: int
+    failed_count: int
     review_count: int
     pending_sync: int
     month_spending_minor: int
@@ -111,6 +114,34 @@ class DesktopController:
             inbox_count = sum(
                 1 for item in inbox_files if str(item.resolve()) not in completed_paths
             )
+            status_counts = {
+                status: int(total or 0)
+                for status, total in session.execute(
+                    select(ReceiptRecord.processing_status, func.count())
+                    .group_by(ReceiptRecord.processing_status)
+                )
+            }
+            file_status_counts = {
+                status: int(total or 0)
+                for status, total in session.execute(
+                    select(ProcessedFileRecord.processing_status, func.count())
+                    .where(
+                        ProcessedFileRecord.processing_status.in_(
+                            ("discovered", "processing", "failed")
+                        )
+                    )
+                    .group_by(ProcessedFileRecord.processing_status)
+                )
+            }
+            processing_count = max(
+                status_counts.get(ReceiptStatus.DISCOVERED.value, 0)
+                + status_counts.get(ReceiptStatus.PROCESSING.value, 0),
+                file_status_counts.get("discovered", 0) + file_status_counts.get("processing", 0),
+            )
+            failed_count = max(
+                status_counts.get(ReceiptStatus.FAILED.value, 0),
+                file_status_counts.get("failed", 0),
+            )
             review_count = int(
                 session.scalar(
                     select(func.count())
@@ -161,25 +192,12 @@ class DesktopController:
                 )
                 for receipt in receipts[:8]
             )
-            category_spending = (
-                tuple(
-                    (name, int(total or 0))
-                    for name, total in session.execute(
-                        select(
-                            CategoryRecord.display_name, func.sum(LineItemRecord.line_total_minor)
-                        )
-                        .join(LineItemRecord, LineItemRecord.category_id == CategoryRecord.id)
-                        .where(LineItemRecord.receipt_id.in_([receipt.id for receipt in receipts]))
-                        .group_by(CategoryRecord.display_name)
-                        .order_by(func.sum(LineItemRecord.line_total_minor).desc())
-                    )
-                )
-                if receipts
-                else ()
-            )
+            category_spending = self._reconciled_category_spending(session, receipts)
         storage = calculate_storage_usage(self.config)
         return DashboardSnapshot(
             inbox_count,
+            processing_count,
+            failed_count,
             review_count,
             pending_sync,
             spent,
@@ -190,6 +208,65 @@ class DesktopController:
             recent,
             category_spending,
         )
+
+    @staticmethod
+    def _reconciled_category_spending(
+        session: Session, receipts: list[ReceiptRecord]
+    ) -> tuple[tuple[str, int], ...]:
+        """Return category totals that add up to the dashboard's confirmed total.
+
+        Line items are normally pre-tax amounts, while the dashboard's headline uses
+        each receipt's final total. Allocate the receipt-level difference across its
+        positive line-item categories so the chart and headline describe the same
+        spending. The underlying line items remain unchanged.
+        """
+        if not receipts:
+            return ()
+
+        receipt_ids = [receipt.id for receipt in receipts]
+        rows = session.execute(
+            select(
+                LineItemRecord.receipt_id,
+                CategoryRecord.display_name,
+                LineItemRecord.line_total_minor,
+            )
+            .join(CategoryRecord, LineItemRecord.category_id == CategoryRecord.id)
+            .where(LineItemRecord.receipt_id.in_(receipt_ids))
+        )
+        by_receipt: dict[int, list[tuple[str, int]]] = defaultdict(list)
+        for receipt_id, name, amount in rows:
+            by_receipt[receipt_id].append((name, int(amount)))
+
+        totals: dict[str, int] = defaultdict(int)
+        for receipt in receipts:
+            items = by_receipt.get(receipt.id, [])
+            if not items:
+                totals["Unallocated"] += receipt.final_total_minor
+                continue
+
+            for name, amount in items:
+                totals[name] += amount
+
+            adjustment = receipt.final_total_minor - sum(amount for _, amount in items)
+            weighted = [(name, amount) for name, amount in items if amount > 0]
+            weight_total = sum(amount for _, amount in weighted)
+            if adjustment == 0 or weight_total <= 0:
+                if adjustment and weight_total <= 0:
+                    totals["Unallocated"] += adjustment
+                continue
+
+            # Allocate with integer cents and put the rounding remainder in the
+            # largest category so the displayed totals always reconcile exactly.
+            allocation: dict[str, int] = defaultdict(int)
+            for name, amount in weighted:
+                allocation[name] += round(adjustment * amount / weight_total)
+            remainder = adjustment - sum(allocation.values())
+            largest_name = max(weighted, key=lambda item: item[1])[0]
+            allocation[largest_name] += remainder
+            for name, amount in allocation.items():
+                totals[name] += amount
+
+        return tuple(sorted(totals.items(), key=lambda item: (-item[1], item[0])))
 
     def categories(self) -> list[tuple[str, str]]:
         with session_scope(self.engine) as session:

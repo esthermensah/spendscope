@@ -85,3 +85,30 @@ def test_confirmed_expense_can_be_recategorized_and_queued(tmp_path: Path) -> No
         assert snapshot.pending_sync == 1
     finally:
         controller.close()
+
+
+def test_category_totals_reconcile_to_receipt_final_total(tmp_path: Path) -> None:
+    config = initialize_configured_workspace(AppConfig(root_folder=tmp_path / "workspace"))
+    config_path = tmp_path / "settings.json"
+    save_config(config, config_path)
+    controller = DesktopController(config, config_path)
+    try:
+        controller.create_manual(
+            ManualExpenseDraft(
+                transaction_date=date(2026, 8, 13),
+                description="Taxed purchase",
+                category_internal_name="shopping",
+                amount_minor=10000,
+                tax_minor=875,
+                currency="USD",
+            )
+        )
+        snapshot = controller.dashboard(date(2026, 8, 13))
+        assert snapshot.month_spending_minor == 10875
+        assert snapshot.category_spending == (("Shopping", 10875),)
+        assert (
+            sum(amount for _, amount in snapshot.category_spending)
+            == snapshot.month_spending_minor
+        )
+    finally:
+        controller.close()
