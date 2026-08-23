@@ -50,10 +50,15 @@ def parse_labeled_amount(
     lines: list[str], labels: tuple[str, ...], *, prefer_last: bool = True
 ) -> ParsedValue[Decimal]:
     matches: list[Decimal] = []
-    for line in lines:
+    for index, line in enumerate(lines):
         lowered = line.casefold()
         if any(re.search(label, lowered) for label in labels):
             amount = amount_at_end(line)
+            # Sparse/columnar OCR often places the label and its value on
+            # adjacent lines (for example ``Grand Total`` followed by ``32.19``).
+            # Accept that layout while keeping the existing same-line behavior.
+            if amount is None and index + 1 < len(lines):
+                amount = amount_at_end(lines[index + 1])
             if amount is not None:
                 matches.append(amount)
     if not matches:

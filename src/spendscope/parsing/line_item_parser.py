@@ -48,6 +48,73 @@ class AmazonTabularSummary:
     total: Decimal
 
 
+def parse_columnar_invoice_items(lines: list[str]) -> tuple[ParsedLineItem, ...]:
+    """Parse invoices with a separate quantity/amount column.
+
+    OCR in this layout usually returns each amount on its own line, while the
+    product description wraps over several lines. We pair each amount with the
+    nearest preceding product text and ignore the shipping/handling summary
+    rows. This is deliberately conservative: uncertain descriptions remain
+    editable in the review screen rather than being silently discarded.
+    """
+    lowered = " ".join(lines).casefold()
+    if "invoice detail" not in lowered:
+        return ()
+    start = next((i for i, line in enumerate(lines) if "invoice detail" in line.casefold()), None)
+    if start is None:
+        return ()
+    end = next(
+        (
+            i
+            for i, line in enumerate(lines[start + 1 :], start + 1)
+            if "subtotal" in line.casefold()
+        ),
+        len(lines),
+    )
+    body = [line.strip() for line in lines[start + 1 : end] if line.strip()]
+    amount_line = re.compile(r"^(?:USD\s*)?\d+[.,]\d{2}$", re.IGNORECASE)
+    amount_indexes = [i for i, line in enumerate(body) if amount_line.fullmatch(line)]
+    items: list[ParsedLineItem] = []
+    previous = -1
+    for index in amount_indexes:
+        amount = parse_amount(body[index])
+        if amount is None or amount <= 0:
+            previous = index
+            continue
+        candidates = [
+            line
+            for line in body[previous + 1 : index]
+            if not _SUMMARY_LABEL.search(line)
+            and not re.fullmatch(r"\d+(?:[.,]\d+)?", line)
+        ]
+        if not candidates:
+            previous = index
+            continue
+        # Prefer a line that looks like the start of a product row; otherwise
+        # the longest line is usually the actual product rather than a wrapped
+        # continuation such as "Soft & Comfortable...".
+        starts = [
+            line
+            for line in candidates
+            if re.match(r"^(?:\d+\s*(?:pc|pcs)|\d+\s+pack|\d+/\d+/\d+.*pcs)", line, re.I)
+        ]
+        description = max(starts or candidates, key=len).strip(" .:-")
+        quantity_match = re.match(r"^(\d+(?:\.\d+)?)\s*(?:pc|pcs|pack)\b", description, re.I)
+        quantity = Decimal(quantity_match.group(1)) if quantity_match else Decimal("1")
+        items.append(
+            ParsedLineItem(
+                description=description,
+                quantity=quantity,
+                unit_price=amount / quantity,
+                line_total=amount,
+                confidence=0.78,
+                source_line="columnar invoice amount column",
+            )
+        )
+        previous = index
+    return tuple(items)
+
+
 def parse_line_items(lines: list[str]) -> tuple[ParsedLineItem, ...]:
     items = []
     for line in lines:

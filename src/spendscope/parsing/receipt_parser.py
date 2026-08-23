@@ -8,7 +8,11 @@ from decimal import Decimal
 from spendscope.parsing.amount_parser import parse_labeled_amount
 from spendscope.parsing.currency_parser import parse_currency
 from spendscope.parsing.date_parser import parse_date
-from spendscope.parsing.line_item_parser import parse_amazon_tabular_summary, parse_line_items
+from spendscope.parsing.line_item_parser import (
+    parse_amazon_tabular_summary,
+    parse_columnar_invoice_items,
+    parse_line_items,
+)
 from spendscope.parsing.merchant_parser import parse_merchant, parse_receipt_number
 from spendscope.parsing.models import ParsedReceipt, ParsedValue
 from spendscope.parsing.validators import reconcile_receipt
@@ -36,6 +40,7 @@ class ReceiptParser:
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         amazon_summary = parse_amazon_tabular_summary(lines)
         amazon_items = amazon_summary.items
+        columnar_invoice_items = parse_columnar_invoice_items(lines)
         merchant = (
             ParsedValue("Amazon", 0.92, ("Amazon",))
             if amazon_items
@@ -49,7 +54,7 @@ class ReceiptParser:
         )
         receipt_number = parse_receipt_number(text)
         currency = parse_currency(text, default_currency=self.default_currency)
-        items = amazon_items or parse_line_items(lines)
+        items = amazon_items or columnar_invoice_items or parse_line_items(lines)
         subtotal = parse_labeled_amount(lines, (r"\bsub\s*total\b",))
         tax = parse_labeled_amount(
             lines,

@@ -28,6 +28,18 @@ class ImageTextExtractor:
         except (OSError, UnidentifiedImageError, Image.DecompressionBombError) as error:
             raise ImageExtractionError(f"image could not be prepared: {error}") from error
         text = self.ocr.extract(prepared, language=self.language)
+        # Sparse-text mode is substantially better for invoice tables where the
+        # description and amount columns are visually separated. Keep the normal
+        # pass for ordinary receipts, and opt in only after recognizing invoice
+        # language so the common path remains unchanged for other layouts.
+        lowered = text.casefold()
+        alternate = getattr(self.ocr, "extract_with_config", None)
+        if alternate is not None and (
+            "sales invoice" in lowered or "invoice detail" in lowered
+        ):
+            sparse_text = alternate(prepared, language=self.language, config="--psm 11")
+            if sparse_text:
+                text = sparse_text
         warnings = () if text else ("OCR returned no text",)
         confidence = min(0.95, 0.45 + len(text) / 1000) if text else 0.0
         return ExtractionResult(
