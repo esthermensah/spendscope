@@ -59,3 +59,58 @@ def test_missing_total_is_inferred_from_extracted_amounts() -> None:
     )
     assert parsed.final_total.value == Decimal("7.70")
     assert "final total inferred" in parsed.final_total.warnings[0]
+
+
+def test_columnar_invoice_sparse_ocr_layout_is_parsed() -> None:
+    parsed = ReceiptParser(default_currency="USD").parse(
+        """Example Apparel Store
+Sales Invoice
+Invoice Date:
+2026-08-06
+Invoice Detail
+1/5/10/20/40pcs Galvanized Pants Clips
+1
+8.71
+pc Non-Slip Bathroom Mat
+7.04
+3pcs Waffle Kitchen Dish Cloths
+5.70
+Minimalist Retractable Carabiner Key Chain
+2.00
+1 Pack Checkered PEVA Shower Curtain
+4.66
+1pc Heavy Duty Tailor Scissors
+2.18
+Item(s) Subtotal
+30.29
+Shipping Fee:
+0.00
+Handling Fee:
+0.00
+Sales Tax:
+1.90
+Grand Total
+32.19""",
+        imported_at=datetime(2026, 8, 23),
+    )
+    assert parsed.merchant.value == "Example Apparel Store"
+    assert str(parsed.transaction_date.value) == "2026-08-06"
+    assert parsed.subtotal.value == Decimal("30.29")
+    assert parsed.tax.value == Decimal("1.90")
+    assert parsed.final_total.value == Decimal("32.19")
+    assert [item.line_total for item in parsed.items] == [
+        Decimal("8.71"),
+        Decimal("7.04"),
+        Decimal("5.70"),
+        Decimal("2.00"),
+        Decimal("4.66"),
+        Decimal("2.18"),
+    ]
+    assert parsed.reconciliation.status == "balanced"
+
+
+def test_product_slash_sequence_is_not_read_as_a_date() -> None:
+    parsed = ReceiptParser(default_currency="USD").parse(
+        "Store\n2026-08-06\n1/5/10/20/40pcs storage clips\n8.71\nGrand Total\n8.71"
+    )
+    assert str(parsed.transaction_date.value) == "2026-08-06"

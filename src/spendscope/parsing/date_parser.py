@@ -8,7 +8,9 @@ from datetime import date, datetime, timedelta
 from spendscope.parsing.models import ParsedValue
 
 _ISO_DATE = re.compile(r"\b(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})\b")
-_NUMERIC_DATE = re.compile(r"\b(\d{1,2})[/.](\d{1,2})[/.](20\d{2}|\d{2})\b")
+_NUMERIC_DATE = re.compile(
+    r"(?<![\d/])\b(\d{1,2})[/.](\d{1,2})[/.](20\d{2}|\d{2})\b(?![\d/])"
+)
 
 
 def parse_date(

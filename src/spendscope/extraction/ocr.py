@@ -38,3 +38,21 @@ class TesseractOcrEngine:
             return str(pytesseract.image_to_string(image, lang=language)).strip()
         except pytesseract.TesseractError as error:
             raise OcrUnavailableError(f"Tesseract failed: {error}") from error
+
+    def extract_with_config(
+        self, image: Image.Image, *, language: str = "eng", config: str = ""
+    ) -> str:
+        """Run an alternate layout pass for documents with separated columns.
+
+        Invoices frequently place the description and amount in separate visual
+        columns. Tesseract's default block mode can merge those columns and lose
+        the amounts. Sparse-text mode preserves the visual order and is used by
+        the image extractor only when an invoice layout is detected.
+        """
+        diagnostic = self.diagnostic()
+        if not diagnostic.available:
+            raise OcrUnavailableError(diagnostic.message or "Tesseract is unavailable")
+        try:
+            return str(pytesseract.image_to_string(image, lang=language, config=config)).strip()
+        except pytesseract.TesseractError as error:
+            raise OcrUnavailableError(f"Tesseract failed: {error}") from error
