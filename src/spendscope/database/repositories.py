@@ -60,6 +60,10 @@ class CategoryRepository:
                         system_category=internal_name in {"tax", "tips", "unallocated"},
                     )
                 )
+            elif internal_name == "shopping" and existing.display_name == "Shopping":
+                # Migrate the original built-in label without overwriting a
+                # user's own custom name for this category.
+                existing.display_name = display_name
             records.append(existing)
         return records
 

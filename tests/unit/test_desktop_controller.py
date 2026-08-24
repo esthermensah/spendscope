@@ -81,7 +81,7 @@ def test_confirmed_expense_can_be_recategorized_and_queued(tmp_path: Path) -> No
         )
 
         snapshot = controller.dashboard(date(2026, 8, 13))
-        assert snapshot.category_spending == (("Shopping", 6420),)
+        assert snapshot.category_spending == (("Clothing", 6420),)
         assert snapshot.pending_sync == 1
     finally:
         controller.close()
@@ -105,7 +105,7 @@ def test_category_totals_reconcile_to_receipt_final_total(tmp_path: Path) -> Non
         )
         snapshot = controller.dashboard(date(2026, 8, 13))
         assert snapshot.month_spending_minor == 10875
-        assert snapshot.category_spending == (("Shopping", 10875),)
+        assert snapshot.category_spending == (("Clothing", 10875),)
         assert (
             sum(amount for _, amount in snapshot.category_spending)
             == snapshot.month_spending_minor

@@ -340,7 +340,7 @@ def test_receipt_review_corrections_confirm_and_update_dashboard(
             ],
         )
     )
-    assert desktop_controller.dashboard(date(2026, 8, 7)).category_spending == (("Shopping", 500),)
+    assert desktop_controller.dashboard(date(2026, 8, 7)).category_spending == (("Clothing", 500),)
 
 
 def test_review_dialog_exposes_editable_receipt_fields(
