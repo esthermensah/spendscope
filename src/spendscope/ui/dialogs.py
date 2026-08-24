@@ -225,11 +225,14 @@ class ReviewDialog(QDialog):
         self.delete_button.setVisible(confirmed_receipt_id is not None)
         self.reprocess_button = QPushButton("Reprocess source")
         self.reprocess_button.setVisible(False)
+        self.reprocess_all_button = QPushButton("Reprocess all")
+        self.reprocess_all_button.setVisible(confirmed_receipt_id is None)
         self.open_source = QPushButton("Open source")
         self.confirm.clicked.connect(lambda: self._resolve(True))
         self.reject_button.clicked.connect(lambda: self._resolve(False))
         self.delete_button.clicked.connect(self._delete_expense)
         self.reprocess_button.clicked.connect(self._reprocess_source)
+        self.reprocess_all_button.clicked.connect(self._reprocess_all)
         self.open_source.clicked.connect(self._open_source)
         metadata = QVBoxLayout()
         metadata.addWidget(self.reason)
@@ -261,6 +264,7 @@ class ReviewDialog(QDialog):
         actions.addStretch()
         actions.addWidget(self.delete_button)
         actions.addWidget(self.reprocess_button)
+        actions.addWidget(self.reprocess_all_button)
         actions.addWidget(self.reject_button)
         actions.addWidget(self.confirm)
         title = QLabel("Edit expense" if confirmed_receipt_id is not None else "Review receipts")
@@ -638,8 +642,7 @@ class ReviewDialog(QDialog):
             self,
             "Reprocess this source?",
             (
-                "SpendScope will send the original file through Inbox again using the current "
-                "OCR and table parser."
+                "SpendScope will try this receipt again using the current processing rules."
             ),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
@@ -653,6 +656,33 @@ class ReviewDialog(QDialog):
             return
         self.receipt_resolved.emit()
         self.accept()
+
+    def _reprocess_all(self) -> None:
+        if not self.rows:
+            return
+        answer = QMessageBox.question(
+            self,
+            "Reprocess all receipts?",
+            "SpendScope will try all receipts currently waiting for review again.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        errors: list[str] = []
+        for receipt in tuple(self.rows):
+            try:
+                self.controller.reprocess_placeholder_receipt(receipt.id)
+            except (LookupError, OSError, ValueError) as error:
+                errors.append(f"{receipt.merchant}: {error}")
+        if errors:
+            QMessageBox.warning(
+                self,
+                "Some receipts could not be reprocessed",
+                "\n".join(errors),
+            )
+        self.receipt_resolved.emit()
+        self._reload()
 
     def _resolve(self, confirm: bool) -> None:
         index = self.list.currentRow()
