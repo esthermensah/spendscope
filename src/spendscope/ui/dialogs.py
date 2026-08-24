@@ -493,6 +493,15 @@ class ReviewDialog(QDialog):
 
     def _remove_item(self) -> None:
         row = self.items.currentRow()
+        # Combo-box/spin-box editors can leave the table without a current
+        # cell. If there is an empty placeholder row, still make the remove
+        # action do what the user expects.
+        if row < 0:
+            for candidate in range(self.items.rowCount() - 1, -1, -1):
+                description = self.items.item(candidate, 0)
+                if description is None or not description.text().strip():
+                    row = candidate
+                    break
         if row >= 0:
             self.items.removeRow(row)
             self._sync_subtotal_to_items()
@@ -555,10 +564,19 @@ class ReviewDialog(QDialog):
             category = self.items.cellWidget(row, 2)
             if description is None or not isinstance(category, QComboBox):
                 raise ValueError("Every line item needs a description and category")
+            description_text = description.text().strip()
+            amount = self._row_amount(row).value()
+            # A blank, zero-value row is an unused placeholder (common after
+            # OCR or when a user starts adding an item). Do not send it to
+            # validation as a real line item.
+            if not description_text and amount == 0:
+                continue
+            if not description_text:
+                raise ValueError("Every non-zero line item needs a description")
             item_drafts.append(
                 ReceiptItemCorrection(
                     id=description.data(Qt.ItemDataRole.UserRole),
-                    description=description.text().strip(),
+                    description=description_text,
                     line_total_minor=Money.from_decimal(
                         Decimal(str(self._row_amount(row).value())), receipt.currency
                     ).minor_units,
