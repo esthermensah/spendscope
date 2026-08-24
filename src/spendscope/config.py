@@ -22,7 +22,7 @@ DEFAULT_CATEGORIES: tuple[tuple[str, str], ...] = (
     ("personal_care", "Personal Care"),
     ("healthcare", "Healthcare"),
     ("education", "Education"),
-    ("shopping", "Shopping"),
+    ("shopping", "Clothing"),
     ("entertainment", "Entertainment"),
     ("travel", "Travel"),
     ("subscriptions", "Subscriptions"),

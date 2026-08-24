@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QSpinBox,
     QTableWidget,
     QTableWidgetItem,
@@ -147,8 +148,23 @@ class ReviewDialog(QDialog):
         self.preview = QLabel("Select a receipt to preview its source file.")
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview.setMinimumSize(360, 200)
-        self.preview.setMaximumHeight(220)
         self.preview.setWordWrap(True)
+        self.preview.setStyleSheet("background: transparent;")
+        self.preview_scroll = QScrollArea()
+        self.preview_scroll.setWidget(self.preview)
+        self.preview_scroll.setWidgetResizable(False)
+        self.preview_scroll.setMinimumSize(360, 220)
+        self.zoom_out = QPushButton("-")
+        self.zoom_reset = QPushButton("100%")
+        self.zoom_in = QPushButton("+")
+        self.zoom_out.setToolTip("Zoom out")
+        self.zoom_reset.setToolTip("Reset zoom")
+        self.zoom_in.setToolTip("Zoom in")
+        self.zoom_out.clicked.connect(lambda: self._change_preview_zoom(-0.25))
+        self.zoom_reset.clicked.connect(self._reset_preview_zoom)
+        self.zoom_in.clicked.connect(lambda: self._change_preview_zoom(0.25))
+        self._preview_zoom = 1.0
+        self._preview_pixmap: QPixmap | None = None
         self.reason = QLabel()
         self.reason.setObjectName("secondaryText")
         self.reason.setWordWrap(True)
@@ -219,8 +235,16 @@ class ReviewDialog(QDialog):
         metadata.addWidget(self.reason)
         metadata.addLayout(details)
         metadata.addStretch()
+        preview_controls = QHBoxLayout()
+        preview_controls.addStretch()
+        preview_controls.addWidget(self.zoom_out)
+        preview_controls.addWidget(self.zoom_reset)
+        preview_controls.addWidget(self.zoom_in)
+        preview_panel = QVBoxLayout()
+        preview_panel.addWidget(self.preview_scroll, 1)
+        preview_panel.addLayout(preview_controls)
         receipt_details = QHBoxLayout()
-        receipt_details.addWidget(self.preview, 3)
+        receipt_details.addLayout(preview_panel, 3)
         receipt_details.addLayout(metadata, 2)
         editor = QVBoxLayout()
         editor.addLayout(receipt_details)
@@ -313,6 +337,8 @@ class ReviewDialog(QDialog):
         self.list.setCurrentRow(-1)
         self.preview.clear()
         self.preview.setText("All caught up — no receipts need review.")
+        self._preview_pixmap = None
+        self._reset_preview_zoom()
         self.reason.setText("Your confirmed receipt is now included in your spending.")
         self.merchant.clear()
         self.when.setDate(QDate.currentDate())
@@ -379,15 +405,41 @@ class ReviewDialog(QDialog):
         path = Path(path_value)
         pixmap = self._source_pixmap(path)
         if pixmap is not None:
-            self.preview.setPixmap(
-                pixmap.scaled(
-                    self.preview.size(),
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-            )
+            self._preview_pixmap = pixmap
+            self._reset_preview_zoom()
             return
+        self._preview_pixmap = None
         self.preview.setText(f"Source preview\n{path.name}\n\nUse Open source to view this file.")
+
+    def _change_preview_zoom(self, delta: float) -> None:
+        self._preview_zoom = min(4.0, max(0.5, self._preview_zoom + delta))
+        self.zoom_reset.setText(f"{round(self._preview_zoom * 100):.0f}%")
+        self._render_preview()
+
+    def _reset_preview_zoom(self) -> None:
+        self._preview_zoom = 1.0
+        self.zoom_reset.setText("100%")
+        self._render_preview()
+
+    def _render_preview(self) -> None:
+        if self._preview_pixmap is None:
+            return
+        viewport = self.preview_scroll.viewport().size()
+        width = max(320, viewport.width() - 12)
+        height = max(180, viewport.height() - 12)
+        scaled = self._preview_pixmap.scaled(
+            int(width * self._preview_zoom),
+            int(height * self._preview_zoom),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        self.preview.setPixmap(scaled)
+        self.preview.resize(scaled.size())
+
+    def resizeEvent(self, event: object) -> None:
+        super().resizeEvent(event)  # type: ignore[arg-type]
+        if self._preview_zoom == 1.0:
+            self._render_preview()
 
     @staticmethod
     def _source_pixmap(path: Path) -> QPixmap | None:
