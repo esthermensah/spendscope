@@ -3,9 +3,6 @@
 **A free, privacy-conscious desktop spending tracker that turns receipts into useful insights while
 keeping you in control of your data.**
 
-## Project case study
-Read the [SpendScope solution-engineering case study](https://your-portfolio-site.com/projects/spendscope) to learn why I built it, the constraints I designed around, and the architecture behind the application.
-
 SpendScope imports receipts and manually entered purchases, helps you review and categorize them,
 and shows where your money is going. Your financial data stays on your computer by default, and an
 optional Google connection can send your spending report to Google Sheets for access from another
@@ -18,7 +15,7 @@ I built SpendScope because I wanted three things that most spending apps did not
 - maximum control over my financial data;
 - no subscription fee; and
 - a desktop-first experience instead of another app constantly living on my phone.
-
+Read more about the [SpendScope solution-engineering case study](https://your-portfolio-site.com/projects/spendscope) to learn why I built it, the constraints I designed around, and the architecture behind the application.
 SpendScope is free and open source. It works locally and offline, while still letting me use Google
 Drive and Sheets when I want access from my phone or another device. The Google connection is
 optional—the desktop app remains the main home for tracking and reviewing spending.
